@@ -81,9 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user?.slack_user_id && issue.assignees?.some((a: { slack_user_id?: string }) =>
         a.slack_user_id && a.slack_user_id === user.slack_user_id
       )) return true;
-      // Check primary assignee — prefer slack_user_id match, fall back to name only if user has slack_user_id
-      // (prevents name collision granting access to wrong user)
-      if (user?.slack_user_id && issue.assignee_name && user?.name && issue.assignee_name === user.name) return true;
+      // Check primary assignee by name — this is a UI hint only; backend enforces real permission via email match
+      if (issue.assignee_name && user?.name && issue.assignee_name === user.name) return true;
       return false;
     },
     [isAdmin, user]

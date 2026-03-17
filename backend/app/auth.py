@@ -36,13 +36,15 @@ class UserContext:
 
 
 def create_token(user: User, team_roles: dict) -> str:
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": user.email,
         "name": user.name,
         "slack_id": user.slack_user_id,
         "is_admin": user.is_admin,
         "roles": team_roles,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiry_hours),
+        "iat": int(now.timestamp()),
+        "exp": now + timedelta(hours=settings.jwt_expiry_hours),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
@@ -67,12 +69,17 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    # Refresh team roles from DB to avoid stale JWT roles after role changes.
-    # The JWT may be valid for days; roles could change in that window.
-    from app.models.team_member import TeamMember
-    role_stmt = select(TeamMember.team_id, TeamMember.role).where(TeamMember.email == email)
-    role_result = await db.execute(role_stmt)
-    team_roles = {str(row.team_id): row.role for row in role_result.all()}
+    # Trust JWT roles if token is fresh (< 1 hour old), otherwise refresh from DB.
+    # Balances performance (no extra query on most requests) with security (stale roles caught within 1 hour).
+    import time
+    token_age_seconds = time.time() - payload.get("iat", 0)
+    if token_age_seconds > 3600:  # older than 1 hour
+        from app.models.team_member import TeamMember
+        role_stmt = select(TeamMember.team_id, TeamMember.role).where(TeamMember.email == email)
+        role_result = await db.execute(role_stmt)
+        team_roles = {str(row.team_id): row.role for row in role_result.all()}
+    else:
+        team_roles = payload.get("roles", {})
 
     return UserContext(user=user, team_roles=team_roles)
 
