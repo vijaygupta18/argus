@@ -128,12 +128,79 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
         team_name: str,
     ) -> dict:
         """
-        Generate root cause analysis for an issue.
-
-        Returns:
-            {"summary": "...", "root_causes": [...], "investigation_steps": [...],
-             "suggested_fixes": [...]}
+        Generate root cause analysis. Uses Vishwakarma in production, generic AI locally.
         """
+        # Production: use Vishwakarma SRE agent
+        if settings.vishwakarma_url:
+            return await self._generate_rca_vishwakarma(issue_title, issue_description, category, team_name)
+
+        # Local: use generic AI
+        return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
+
+    async def _generate_rca_vishwakarma(
+        self, issue_title: str, issue_description: str, category: str, team_name: str
+    ) -> dict:
+        """Call Vishwakarma's /api/investigate endpoint for deep RCA."""
+        import httpx
+
+        question = f"Production issue: {issue_title}\n\nDescription: {issue_description}\nCategory: {category}\nTeam: {team_name}\n\nInvestigate this issue and provide root cause analysis."
+
+        try:
+            headers = {}
+            if settings.vishwakarma_api_key:
+                headers["Authorization"] = f"Bearer {settings.vishwakarma_api_key}"
+
+            async with httpx.AsyncClient(timeout=float(settings.vishwakarma_timeout)) as client:
+                resp = await client.post(
+                    f"{settings.vishwakarma_url.rstrip('/')}/api/investigate",
+                    json={"question": question, "stream": False},
+                    headers=headers,
+                )
+
+            if resp.status_code != 200:
+                logger.error(f"Vishwakarma returned {resp.status_code}: {resp.text[:200]}")
+                return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
+
+            data = resp.json()
+            # Vishwakarma returns InvestigationResult with "analysis" field (markdown RCA)
+            rca_text = data.get("analysis", "")
+            meta = data.get("meta", {})
+            tool_outputs = data.get("tool_outputs", [])
+
+            if not rca_text:
+                logger.warning("Vishwakarma returned empty analysis, falling back to generic AI")
+                return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
+
+            # Extract first paragraph as summary
+            paragraphs = [p.strip() for p in rca_text.split("\n\n") if p.strip()]
+            summary = paragraphs[0] if paragraphs else rca_text[:500]
+            # Strip markdown headers from summary
+            if summary.startswith("#"):
+                summary = paragraphs[1] if len(paragraphs) > 1 else summary.lstrip("# ")
+
+            return {
+                "summary": summary,
+                "full_report": rca_text,
+                "root_causes": [],
+                "investigation_steps": [],
+                "suggested_fixes": [],
+                "related_systems": [],
+                "source": "vishwakarma",
+                "meta": {
+                    "steps": meta.get("steps"),
+                    "duration_seconds": meta.get("duration_seconds"),
+                    "tools_used": len(tool_outputs),
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Vishwakarma RCA failed: {e}, falling back to generic AI")
+            return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
+
+    async def _generate_rca_generic(
+        self, issue_title: str, issue_description: str, category: str, team_name: str
+    ) -> dict:
+        """Generic AI RCA using litellm."""
         prompt = f"""RCA for production issue. Title: {issue_title}
 Description: {issue_description}
 Category: {category}, Team: {team_name}
@@ -153,22 +220,16 @@ Keep each array to 3 items max. Be concise."""
             content = response.choices[0].message.content or ""
             result = self._extract_json(content)
 
-            # Validate structure
             if "summary" not in result:
                 result["summary"] = "RCA analysis completed."
-            if "root_causes" not in result:
-                result["root_causes"] = []
-            if "investigation_steps" not in result:
-                result["investigation_steps"] = []
-            if "suggested_fixes" not in result:
-                result["suggested_fixes"] = []
-            if "related_systems" not in result:
-                result["related_systems"] = []
-
+            for key in ["root_causes", "investigation_steps", "suggested_fixes", "related_systems"]:
+                if key not in result:
+                    result[key] = []
+            result["source"] = "generic_ai"
             return result
 
         except Exception as e:
-            logger.error(f"AI RCA generation failed: {e}")
+            logger.error(f"Generic AI RCA failed: {e}")
             return {
                 "summary": f"Automated RCA generation failed: {str(e)}",
                 "root_causes": [],
@@ -179,6 +240,7 @@ Keep each array to 3 items max. Be concise."""
                 ],
                 "suggested_fixes": [],
                 "related_systems": [],
+                "source": "fallback",
             }
 
 

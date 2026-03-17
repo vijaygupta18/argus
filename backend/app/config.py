@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:5173/auth/callback"
+    # Vishwakarma RCA integration — if set, uses Vishwakarma for production RCA instead of generic AI
+    vishwakarma_url: str = ""  # e.g., http://vishwakarma.monitoring.svc.cluster.local:5050
+    vishwakarma_api_key: str = ""  # VK_API_KEY if needed
+    vishwakarma_timeout: int = 600  # seconds (10 min default)
 
     @cached_property
     def admin_email_list(self) -> list[str]:

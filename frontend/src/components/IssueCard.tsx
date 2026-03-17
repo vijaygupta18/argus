@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import type { Issue } from '../api/types';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
@@ -28,16 +29,21 @@ export default function IssueCard({ issue }: IssueCardProps) {
               {issue.team_name}
             </span>
           )}
-          {issue.assignee_name && (
+          {(issue.assignees?.length > 0 || issue.assignee_name) && (
             <span className="text-xs text-slate-400">
-              &rarr; {issue.assignee_name}
+              &rarr; {issue.assignees?.length > 0
+                ? issue.assignees.map((a: { name: string }) => a.name).join(', ')
+                : issue.assignee_name}
             </span>
           )}
         </div>
       </div>
-      <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
-        {timeAgo(issue.created_at)}
-      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-xs text-slate-400 whitespace-nowrap">
+          {timeAgo(issue.created_at)}
+        </span>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+      </div>
     </div>
   );
 }

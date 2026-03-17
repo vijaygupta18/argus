@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   AlertCircle,
@@ -10,22 +11,24 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchDashboardStats } from '../api/client';
+import Avatar from './Avatar';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/issues', icon: AlertCircle, label: 'Issues' },
+  { to: '/issues', icon: AlertCircle, label: 'Issues', badgeKey: 'open_issues' as const },
   { to: '/teams', icon: Users, label: 'Teams' },
 ];
 
 function RoleBadge({ role }: { role: 'admin' | 'leader' | 'worker' }) {
   const colors = {
-    admin: 'bg-purple-100 text-purple-700',
-    leader: 'bg-blue-100 text-blue-700',
-    worker: 'bg-slate-100 text-slate-600',
+    admin: 'bg-purple-100 text-purple-700 ring-1 ring-purple-200',
+    leader: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
+    worker: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
   };
 
   return (
-    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${colors[role]}`}>
+    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md ${colors[role]}`}>
       {role.charAt(0).toUpperCase() + role.slice(1)}
     </span>
   );
@@ -34,16 +37,30 @@ function RoleBadge({ role }: { role: 'admin' | 'leader' | 'worker' }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout, isAdmin } = useAuth();
 
+  const { data: stats } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: fetchDashboardStats,
+    staleTime: 60_000,
+  });
+
+  const userRole: 'admin' | 'leader' | 'worker' = isAdmin
+    ? 'admin'
+    : user?.roles && Object.values(user.roles).includes('leader')
+      ? 'leader'
+      : 'worker';
+
   return (
     <>
       {/* Logo / Brand */}
-      <div className="h-16 flex items-center gap-2.5 px-6 border-b border-slate-200 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-          <Shield className="w-4.5 h-4.5 text-white" />
+      <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-200/60 shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md shadow-blue-500/20">
+          <Shield className="w-5 h-5 text-white" />
         </div>
-        <span className="text-lg font-semibold text-slate-900 tracking-tight">
-          Argus
-        </span>
+        <div>
+          <span className="text-lg font-bold text-slate-900 tracking-tight">
+            Argus
+          </span>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -55,17 +72,31 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             end={item.to === '/'}
             onClick={onNavigate}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `relative flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : ''}`} />
-                {item.label}
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
+                )}
+                <item.icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : ''}`} />
+                <span className="flex-1">{item.label}</span>
+                {item.badgeKey && stats && stats[item.badgeKey] > 0 && (
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center ${
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {stats[item.badgeKey]}
+                  </span>
+                )}
               </>
             )}
           </NavLink>
@@ -74,26 +105,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* User Info */}
       {user && (
-        <div className="border-t border-slate-200 p-4 shrink-0">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-sm font-semibold text-white shrink-0">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
+        <div className="border-t border-slate-200/60 p-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <Avatar name={user.name} size="md" />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
-                {isAdmin && <RoleBadge role="admin" />}
+              <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <RoleBadge role={userRole} />
               </div>
-              <p className="text-xs text-slate-500 truncate">{user.email}</p>
             </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 w-full mt-3 px-3 py-2 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out
-          </button>
         </div>
       )}
     </>
@@ -106,21 +134,21 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-slate-50">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0">
+      <aside className="hidden md:flex w-64 bg-gradient-to-b from-slate-50 to-white border-r border-slate-200 flex-col shrink-0">
         <SidebarContent />
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-white/80 backdrop-blur-lg border-b border-slate-200 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm shadow-blue-500/20">
             <Shield className="w-4 h-4 text-white" />
           </div>
-          <span className="text-base font-semibold text-slate-900">Argus</span>
+          <span className="text-base font-bold text-slate-900">Argus</span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -129,14 +157,14 @@ export default function Layout() {
       {/* Mobile Sidebar Overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/30"
+          className="md:hidden fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-200 ease-in-out ${
+        className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-gradient-to-b from-slate-50 to-white border-r border-slate-200 flex flex-col transform transition-transform duration-200 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

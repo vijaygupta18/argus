@@ -116,6 +116,7 @@ export interface UpdateIssuePayload {
   team_id?: string | null;
   assigned_to?: string | null;
   notifications_muted?: boolean;
+  reason?: string;
 }
 
 export interface CreateTeamPayload {

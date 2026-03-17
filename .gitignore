@@ -34,3 +34,5 @@ pgdata/
 
 # Logs
 *.log
+
+/prodk8s

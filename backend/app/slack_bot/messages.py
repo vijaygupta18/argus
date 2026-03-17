@@ -173,7 +173,7 @@ def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: 
             {"type": "section", "text": {"type": "mrkdwn", "text": ":white_check_mark: *Issue Resolved*"}},
             {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
             {"type": "section", "fields": [
-                {"type": "mrkdwn", "text": f"*Resolved by:* {resolved_by or 'Unknown'}"},
+                {"type": "mrkdwn", "text": f"*Marked Resolved by:* {resolved_by or 'Unknown'}"},
                 {"type": "mrkdwn", "text": f"*Time to resolution:* {duration_text or 'N/A'}"},
             ]},
             {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},

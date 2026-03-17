@@ -7,17 +7,61 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  Filter,
   Inbox,
   Plus,
   X,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { fetchIssues, fetchTeams, createIssue } from '../api/client';
-import type { IssueStatus, IssuePriority, Team } from '../api/types';
+import type { IssueStatus, IssuePriority, Team, Issue } from '../api/types';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import { timeAgo, statusLabels, priorityLabels } from '../utils/format';
 import { useAuth } from '../contexts/AuthContext';
+
+/* ------------------------------------------------------------------ */
+/* Avatar helper — deterministic color from name                       */
+/* ------------------------------------------------------------------ */
+
+function nameToColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500',
+    'bg-teal-500', 'bg-cyan-500', 'bg-violet-500', 'bg-fuchsia-500',
+  ];
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function AvatarCircle({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
+  const bg = nameToColor(name);
+  const sizeClass = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-7 h-7 text-xs';
+  return (
+    <div
+      className={`${bg} ${sizeClass} rounded-full flex items-center justify-center text-white font-semibold shrink-0 ring-2 ring-white`}
+      title={name}
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Priority bar color for issue cards                                  */
+/* ------------------------------------------------------------------ */
+
+function priorityBarClass(priority: IssuePriority | null): string {
+  switch (priority) {
+    case 'critical': return 'priority-bar-critical';
+    case 'high': return 'priority-bar-high';
+    case 'medium': return 'priority-bar-medium';
+    case 'low': return 'priority-bar-low';
+    default: return 'priority-bar-none';
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Create Issue Modal                                                   */
@@ -70,11 +114,16 @@ function CreateIssueModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-modal-backdrop bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 animate-modal-content">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="text-base font-semibold text-slate-900">Create Issue</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Plus className="w-4 h-4 text-blue-600" />
+            </div>
+            <h3 className="text-base font-semibold text-slate-900">Create Issue</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -156,13 +205,146 @@ function CreateIssueModal({
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               {mutation.isPending ? 'Creating...' : 'Create Issue'}
             </button>
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Issue Card Row                                                       */
+/* ------------------------------------------------------------------ */
+
+function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left issue-card-hover border-l-[3px] ${priorityBarClass(issue.priority)} bg-white rounded-lg border border-slate-200 px-4 py-3.5 group cursor-pointer hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        {/* Left content */}
+        <div className="flex-1 min-w-0">
+          {/* Title row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+              {issue.title}
+            </h3>
+            {issue.category && (
+              <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-medium shrink-0">
+                {issue.category}
+              </span>
+            )}
+          </div>
+
+          {/* Metadata row */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <StatusBadge status={issue.status} />
+            <PriorityBadge priority={issue.priority} />
+
+            {issue.team_name && (
+              <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                {issue.team_name}
+              </span>
+            )}
+
+            {/* Assignee avatars */}
+            {issue.assignees && issue.assignees.length > 0 ? (
+              <div className="flex items-center -space-x-1.5 ml-1">
+                {issue.assignees.slice(0, 3).map((a: { id: string; name: string }) => (
+                  <AvatarCircle key={a.id} name={a.name} />
+                ))}
+                {issue.assignees.length > 3 && (
+                  <span className="w-6 h-6 rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600 flex items-center justify-center ring-2 ring-white">
+                    +{issue.assignees.length - 3}
+                  </span>
+                )}
+              </div>
+            ) : issue.assignee_name ? (
+              <AvatarCircle name={issue.assignee_name} />
+            ) : null}
+
+            {/* Reported by */}
+            {issue.reported_by_name && (
+              <span className="text-xs text-slate-400 ml-1 hidden sm:inline">
+                by {issue.reported_by_name}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: time */}
+        <div className="shrink-0 text-right pt-0.5">
+          <span className="text-xs text-slate-400 whitespace-nowrap">
+            {timeAgo(issue.created_at)}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Filter chip                                                          */
+/* ------------------------------------------------------------------ */
+
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full ring-1 ring-blue-100">
+      {label}
+      <button
+        onClick={onRemove}
+        className="hover:bg-blue-100 rounded-full p-0.5 transition-colors -mr-0.5"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                          */
+/* ------------------------------------------------------------------ */
+
+function EmptyState({
+  hasFilters,
+  onClear,
+}: {
+  hasFilters: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="text-center py-20 px-6">
+      {/* Illustration-like composition */}
+      <div className="relative w-24 h-24 mx-auto mb-6">
+        <div className="absolute inset-0 bg-slate-100 rounded-2xl rotate-6" />
+        <div className="absolute inset-0 bg-slate-50 rounded-2xl -rotate-3" />
+        <div className="absolute inset-0 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
+          <Inbox className="w-10 h-10 text-slate-300" />
+        </div>
+      </div>
+      <h3 className="text-base font-semibold text-slate-700 mb-1">
+        {hasFilters ? 'No issues match your filters' : 'No issues yet'}
+      </h3>
+      <p className="text-sm text-slate-400 max-w-xs mx-auto">
+        {hasFilters
+          ? 'Try adjusting your filters or broadening your search query to find what you\'re looking for.'
+          : 'Issues will appear here as they are reported via Slack or created manually.'}
+      </p>
+      {hasFilters && (
+        <button
+          onClick={onClear}
+          className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+          Clear all filters
+        </button>
+      )}
     </div>
   );
 }
@@ -204,6 +386,11 @@ export default function IssuesPage() {
     [searchParams, setSearchParams]
   );
 
+  const clearAllFilters = useCallback(() => {
+    setSearchParams({});
+    setLocalSearch('');
+  }, [setSearchParams]);
+
   const { data: teams } = useQuery<Team[]>({
     queryKey: ['teams'],
     queryFn: fetchTeams,
@@ -225,25 +412,53 @@ export default function IssuesPage() {
   const totalPages = data ? Math.ceil(data.total / perPage) : 0;
   const hasActiveFilters = !!(statusFilter || teamFilter || priorityFilter || searchQuery);
 
+  // Build active filter summary text
+  const activeFilterParts: string[] = [];
+  if (statusFilter) activeFilterParts.push(statusLabels[statusFilter as IssueStatus]);
+  if (priorityFilter) activeFilterParts.push(`${priorityLabels[priorityFilter as IssuePriority]} priority`);
+  if (teamFilter && teams) {
+    const team = teams.find(t => t.id === teamFilter);
+    if (team) activeFilterParts.push(team.name);
+  }
+  if (searchQuery) activeFilterParts.push(`"${searchQuery}"`);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateFilter('search', localSearch);
   };
 
+  const handleClearSearch = () => {
+    setLocalSearch('');
+    updateFilter('search', '');
+  };
+
+  // Pagination range
+  const startItem = data ? (page - 1) * perPage + 1 : 0;
+  const endItem = data ? Math.min(page * perPage, data.total) : 0;
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto animate-page-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Issues</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Issues</h1>
+            {data && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 tabular-nums">
+                {data.total}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-1">
-            {data ? `${data.total} total issue${data.total !== 1 ? 's' : ''}` : 'Loading...'}
+            {hasActiveFilters
+              ? `Filtered by ${activeFilterParts.join(', ')}`
+              : 'Track and manage production issues'}
           </p>
         </div>
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-sm hover:shadow-md active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             Create Issue
@@ -258,18 +473,11 @@ export default function IssuesPage() {
         teams={teams}
       />
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-700">Filters</span>
-          {hasActiveFilters && (
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-          )}
-        </div>
+      {/* Filter Bar */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
-          <form onSubmit={handleSearchSubmit} className="flex-1 min-w-[200px]">
+          <form onSubmit={handleSearchSubmit} className="flex-1 min-w-[220px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -277,233 +485,196 @@ export default function IssuesPage() {
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
                 placeholder="Search issues..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 hover:bg-white transition-colors placeholder:text-slate-400"
               />
+              {localSearch && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </form>
 
-          {/* Status */}
-          <select
-            value={statusFilter}
-            onChange={(e) => updateFilter('status', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-colors"
-          >
-            <option value="">All Statuses</option>
-            {(Object.keys(statusLabels) as IssueStatus[]).map((s) => (
-              <option key={s} value={s}>
-                {statusLabels[s]}
-              </option>
-            ))}
-          </select>
+          <div className="w-px h-6 bg-slate-200 hidden sm:block" />
 
-          {/* Priority */}
-          <select
-            value={priorityFilter}
-            onChange={(e) => updateFilter('priority', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-colors"
-          >
-            <option value="">All Priorities</option>
-            {(Object.keys(priorityLabels) as IssuePriority[]).map((p) => (
-              <option key={p} value={p}>
-                {priorityLabels[p]}
-              </option>
-            ))}
-          </select>
+          {/* Filter dropdowns */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
 
-          {/* Team */}
-          <select
-            value={teamFilter}
-            onChange={(e) => updateFilter('team_id', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-colors"
-          >
-            <option value="">All Teams</option>
-            {teams?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <button
-              onClick={() => {
-                setSearchParams({});
-                setLocalSearch('');
-              }}
-              className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            <select
+              value={statusFilter}
+              onChange={(e) => updateFilter('status', e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 hover:bg-white transition-colors cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <option value="">All Statuses</option>
+              {(Object.keys(statusLabels) as IssueStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {statusLabels[s]}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={priorityFilter}
+              onChange={(e) => updateFilter('priority', e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+            >
+              <option value="">All Priorities</option>
+              {(Object.keys(priorityLabels) as IssuePriority[]).map((p) => (
+                <option key={p} value={p}>
+                  {priorityLabels[p]}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={teamFilter}
+              onChange={(e) => updateFilter('team_id', e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+            >
+              <option value="">All Teams</option>
+              {teams?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Active filter chips */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 flex-wrap">
+            <span className="text-xs text-slate-400 font-medium">Active:</span>
+
+            {statusFilter && (
+              <FilterChip
+                label={statusLabels[statusFilter as IssueStatus]}
+                onRemove={() => updateFilter('status', '')}
+              />
+            )}
+            {priorityFilter && (
+              <FilterChip
+                label={priorityLabels[priorityFilter as IssuePriority]}
+                onRemove={() => updateFilter('priority', '')}
+              />
+            )}
+            {teamFilter && teams && (
+              <FilterChip
+                label={teams.find(t => t.id === teamFilter)?.name || 'Team'}
+                onRemove={() => updateFilter('team_id', '')}
+              />
+            )}
+            {searchQuery && (
+              <FilterChip
+                label={`Search: ${searchQuery}`}
+                onRemove={() => { updateFilter('search', ''); setLocalSearch(''); }}
+              />
+            )}
+
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-slate-500 hover:text-slate-700 font-medium ml-1 transition-colors"
+            >
               Clear all
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-            <p className="text-sm text-slate-400">Loading issues...</p>
           </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <AlertCircle className="w-8 h-8 text-red-400" />
-            <p className="text-sm text-red-600 font-medium">Failed to load issues</p>
-            <button
-              onClick={() => refetch()}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Try again
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50">
-                    <th className="px-5 py-3">Title</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Priority</th>
-                    <th className="px-5 py-3">Team</th>
-                    <th className="px-5 py-3">Assigned To</th>
-                    <th className="px-5 py-3">Reported By</th>
-                    <th className="px-5 py-3">Created</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data?.items.map((issue) => (
-                    <tr
-                      key={issue.id}
-                      onClick={() => navigate(`/issues/${issue.id}`)}
-                      className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
-                    >
-                      <td className="px-5 py-3.5">
-                        <span className="text-sm font-medium text-slate-900 group-hover:text-blue-600 transition-colors">
-                          {issue.title}
-                        </span>
-                        {issue.category && (
-                          <span className="ml-2 text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                            {issue.category}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge status={issue.status} />
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <PriorityBadge priority={issue.priority} />
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-slate-600">
-                        {issue.team_name || <span className="text-slate-300">--</span>}
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-slate-600">
-                        {issue.assignees && issue.assignees.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {issue.assignees.map((a: { id: string; name: string }, idx: number) => (
-                              <span key={a.id} className="inline-flex items-center">
-                                <span className="text-slate-700">{a.name}</span>
-                                {idx < issue.assignees.length - 1 && (
-                                  <span className="text-slate-300 mx-0.5">,</span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          issue.assignee_name || <span className="text-slate-300">--</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-slate-600">
-                        {issue.reported_by_name || <span className="text-slate-300">--</span>}
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-slate-400 whitespace-nowrap">
-                        {timeAgo(issue.created_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {data && data.items.length === 0 && (
-              <div className="text-center py-16">
-                <Inbox className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                <p className="text-sm font-medium text-slate-500">
-                  {hasActiveFilters ? 'No issues match your filters' : 'No issues yet'}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  {hasActiveFilters
-                    ? 'Try adjusting your filters or search query'
-                    : 'Issues will appear here as they are reported via Slack'}
-                </p>
-                {hasActiveFilters && (
-                  <button
-                    onClick={() => {
-                      setSearchParams({});
-                      setLocalSearch('');
-                    }}
-                    className="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
-                <p className="text-sm text-slate-500">
-                  Page {page} of {totalPages} ({data?.total} results)
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => updateFilter('page', String(page - 1))}
-                    disabled={page <= 1}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                    let pageNum: number;
-                    if (totalPages <= 7) {
-                      pageNum = i + 1;
-                    } else if (page <= 4) {
-                      pageNum = i + 1;
-                    } else if (page >= totalPages - 3) {
-                      pageNum = totalPages - 6 + i;
-                    } else {
-                      pageNum = page - 3 + i;
-                    }
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => updateFilter('page', String(pageNum))}
-                        className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                          pageNum === page
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => updateFilter('page', String(page + 1))}
-                    disabled={page >= totalPages}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
         )}
       </div>
+
+      {/* Issue List */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          <p className="text-sm text-slate-400">Loading issues...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <AlertCircle className="w-10 h-10 text-red-300 mx-auto mb-3" />
+          <p className="text-sm text-red-600 font-medium mb-1">Failed to load issues</p>
+          <p className="text-xs text-slate-400 mb-4">Something went wrong. Please try again.</p>
+          <button
+            onClick={() => refetch()}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Try again
+          </button>
+        </div>
+      ) : data && data.items.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200">
+          <EmptyState hasFilters={hasActiveFilters} onClear={clearAllFilters} />
+        </div>
+      ) : (
+        <>
+          {/* Issue cards */}
+          <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto custom-scrollbar pr-1">
+            {data?.items.map((issue) => (
+              <IssueRow
+                key={issue.id}
+                issue={issue}
+                onClick={() => navigate(`/issues/${issue.id}`)}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-slate-200 px-5 py-3 shadow-sm">
+              <p className="text-sm text-slate-500">
+                Showing <span className="font-medium text-slate-700">{startItem}-{endItem}</span> of{' '}
+                <span className="font-medium text-slate-700">{data?.total}</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => updateFilter('page', String(page - 1))}
+                  disabled={page <= 1}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Prev
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 7) {
+                    pageNum = i + 1;
+                  } else if (page <= 4) {
+                    pageNum = i + 1;
+                  } else if (page >= totalPages - 3) {
+                    pageNum = totalPages - 6 + i;
+                  } else {
+                    pageNum = page - 3 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => updateFilter('page', String(pageNum))}
+                      className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                        pageNum === page
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => updateFilter('page', String(page + 1))}
+                  disabled={page >= totalPages}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

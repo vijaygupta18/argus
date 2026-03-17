@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -21,6 +21,11 @@ import {
   RefreshCw,
   GitBranch,
   Shield,
+  Lock,
+  Lightbulb,
+  Search as SearchIcon,
+  Wrench,
+  Layers,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchIssue, fetchIssueHistory, updateIssue, resolveIssue, fetchTeams, fetchTeamMembers } from '../api/client';
@@ -35,6 +40,35 @@ interface IssueDetailProps {
 }
 
 /* ------------------------------------------------------------------ */
+/* Avatar helper                                                        */
+/* ------------------------------------------------------------------ */
+
+function nameToColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500',
+    'bg-teal-500', 'bg-cyan-500', 'bg-violet-500', 'bg-fuchsia-500',
+  ];
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function AvatarChip({ name }: { name: string }) {
+  const bg = nameToColor(name);
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-50 text-slate-700 ring-1 ring-slate-200">
+      <span className={`w-5 h-5 rounded-full ${bg} flex items-center justify-center text-[10px] font-semibold text-white shrink-0`}>
+        {name.charAt(0).toUpperCase()}
+      </span>
+      {name}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Resolve / Close Modal                                               */
 /* ------------------------------------------------------------------ */
 
@@ -46,6 +80,7 @@ function ReasonModal({
   isPending,
   onClose,
   onSubmit,
+  variant = 'default',
 }: {
   title: string;
   label: string;
@@ -54,6 +89,7 @@ function ReasonModal({
   isPending: boolean;
   onClose: () => void;
   onSubmit: (reason: string) => void;
+  variant?: 'default' | 'resolve' | 'close';
 }) {
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
@@ -67,12 +103,26 @@ function ReasonModal({
     onSubmit(reason.trim());
   };
 
+  const iconBg = variant === 'resolve' ? 'bg-green-50' : variant === 'close' ? 'bg-slate-100' : 'bg-blue-50';
+  const iconColor = variant === 'resolve' ? 'text-green-600' : variant === 'close' ? 'text-slate-500' : 'text-blue-600';
+  const Icon = variant === 'resolve' ? CheckCircle2 : variant === 'close' ? Lock : CheckCircle2;
+  const submitBg = variant === 'resolve'
+    ? 'bg-green-600 hover:bg-green-700'
+    : variant === 'close'
+      ? 'bg-slate-700 hover:bg-slate-800'
+      : 'bg-blue-600 hover:bg-blue-700';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-modal-backdrop bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 animate-modal-content">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}>
+              <Icon className={`w-4 h-4 ${iconColor}`} />
+            </div>
+            <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -84,9 +134,9 @@ function ReasonModal({
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              rows={4}
+              rows={5}
               placeholder="Please provide details..."
-              className={`w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+              className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors leading-relaxed ${
                 touched && !reason.trim()
                   ? 'border-red-300 bg-red-50'
                   : 'border-slate-300'
@@ -107,7 +157,7 @@ function ReasonModal({
             <button
               type="submit"
               disabled={isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={`px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm ${submitBg}`}
             >
               {isPending ? 'Submitting...' : submitLabel}
             </button>
@@ -164,16 +214,19 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
   const data = typeof rca === 'string' ? (() => { try { return JSON.parse(rca); } catch { return null; } })() : rca;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50/50 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-violet-50 flex items-center justify-center ring-1 ring-purple-100">
             <Brain className="w-4 h-4 text-purple-600" />
           </div>
-          <h3 className="text-base font-semibold text-slate-900">AI Root Cause Analysis</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">AI Root Cause Analysis</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Generated analysis and recommendations</p>
+          </div>
         </div>
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -183,51 +236,71 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
       </button>
       {expanded && (
         <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-5">
+          {/* Summary */}
           {data?.summary && (
-            <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
+            <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50">
+              <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
+            </div>
           )}
 
+          {/* Root Causes */}
           {data?.root_causes?.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-slate-800 mb-3">Root Causes</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
+                <h4 className="text-sm font-semibold text-slate-800">Root Causes</h4>
+              </div>
               <div className="space-y-2.5">
                 {data.root_causes.map((rc: { cause: string; probability: string }, i: number) => (
-                  <div key={i} className="flex items-start gap-2.5">
-                    <span className={`shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                  <div key={i} className="flex items-start gap-3 bg-slate-50/50 rounded-lg px-3 py-2.5">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center mt-0.5">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-slate-700 leading-relaxed">{rc.cause}</span>
+                    </div>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
                       rc.probability === 'high' ? 'bg-red-50 text-red-700 ring-1 ring-red-100' :
                       rc.probability === 'medium' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' :
                       'bg-green-50 text-green-700 ring-1 ring-green-100'
                     }`}>{rc.probability}</span>
-                    <span className="text-sm text-slate-700 leading-relaxed">{rc.cause}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* Investigation Steps */}
           {data?.investigation_steps?.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-slate-800 mb-3">Investigation Steps</h4>
-              <ol className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <SearchIcon className="w-3.5 h-3.5 text-slate-500" />
+                <h4 className="text-sm font-semibold text-slate-800">Investigation Steps</h4>
+              </div>
+              <div className="space-y-1.5">
                 {data.investigation_steps.map((step: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                    <span className="shrink-0 w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium flex items-center justify-center mt-0.5">
+                  <div key={i} className="flex items-start gap-3 py-1.5">
+                    <span className="shrink-0 w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[11px] font-bold flex items-center justify-center mt-0.5 tabular-nums">
                       {i + 1}
                     </span>
-                    <span className="leading-relaxed">{step}</span>
-                  </li>
+                    <span className="text-sm text-slate-700 leading-relaxed">{step}</span>
+                  </div>
                 ))}
-              </ol>
+              </div>
             </div>
           )}
 
+          {/* Suggested Fixes */}
           {data?.suggested_fixes?.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-slate-800 mb-3">Suggested Fixes</h4>
+            <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60">
+              <div className="flex items-center gap-2 mb-3">
+                <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
+                <h4 className="text-sm font-semibold text-emerald-800">Suggested Fixes</h4>
+              </div>
               <ul className="space-y-2">
                 {data.suggested_fixes.map((fix: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                    <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-400 mt-2" />
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-emerald-800">
+                    <Wrench className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
                     <span className="leading-relaxed">{fix}</span>
                   </li>
                 ))}
@@ -235,12 +308,21 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
             </div>
           )}
 
+          {/* Related Systems */}
           {data?.related_systems?.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-slate-800 mb-3">Related Systems</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <h4 className="text-sm font-semibold text-slate-800">Related Systems</h4>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {data.related_systems.map((sys: string, i: number) => (
-                  <span key={i} className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg">{sys}</span>
+                  <span
+                    key={i}
+                    className="px-3 py-1.5 bg-slate-50 text-slate-700 text-xs font-medium rounded-lg ring-1 ring-slate-200 hover:bg-slate-100 transition-colors cursor-default"
+                  >
+                    {sys}
+                  </span>
                 ))}
               </div>
             </div>
@@ -262,22 +344,22 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
 function getHistoryIcon(action: string) {
   const lower = action.toLowerCase();
   if (lower.includes('status') || lower.includes('changed status'))
-    return <RefreshCw className="w-3.5 h-3.5 text-blue-500" />;
+    return <RefreshCw className="w-3 h-3 text-blue-500" />;
   if (lower.includes('assign'))
-    return <UserCheck className="w-3.5 h-3.5 text-indigo-500" />;
+    return <UserCheck className="w-3 h-3 text-indigo-500" />;
   if (lower.includes('team'))
-    return <ArrowRightLeft className="w-3.5 h-3.5 text-amber-500" />;
+    return <ArrowRightLeft className="w-3 h-3 text-amber-500" />;
   if (lower.includes('resolve'))
-    return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />;
+    return <CheckCircle2 className="w-3 h-3 text-green-500" />;
   if (lower.includes('close'))
-    return <X className="w-3.5 h-3.5 text-slate-400" />;
+    return <X className="w-3 h-3 text-slate-400" />;
   if (lower.includes('priority'))
-    return <AlertCircle className="w-3.5 h-3.5 text-orange-500" />;
+    return <AlertCircle className="w-3 h-3 text-orange-500" />;
   if (lower.includes('create') || lower.includes('reported'))
-    return <GitBranch className="w-3.5 h-3.5 text-purple-500" />;
+    return <GitBranch className="w-3 h-3 text-purple-500" />;
   if (lower.includes('categori'))
-    return <Tag className="w-3.5 h-3.5 text-teal-500" />;
-  return <Clock className="w-3.5 h-3.5 text-slate-400" />;
+    return <Tag className="w-3 h-3 text-teal-500" />;
+  return <Clock className="w-3 h-3 text-slate-400" />;
 }
 
 function getHistoryDotColor(action: string): string {
@@ -292,6 +374,9 @@ function getHistoryDotColor(action: string): string {
 }
 
 function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const COLLAPSED_COUNT = 5;
+
   if (history.length === 0) {
     return (
       <div className="text-center py-8">
@@ -301,19 +386,22 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
     );
   }
 
+  const visibleHistory = showAll ? history : history.slice(0, COLLAPSED_COUNT);
+  const hasMore = history.length > COLLAPSED_COUNT;
+
   return (
     <div className="space-y-0">
-      {history.map((entry, idx) => (
+      {visibleHistory.map((entry, idx) => (
         <div key={entry.id} className="flex gap-3">
           {/* Timeline line */}
           <div className="flex flex-col items-center">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ring-4 ${getHistoryDotColor(entry.action)}`}>
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-4 ${getHistoryDotColor(entry.action)}`}>
               {getHistoryIcon(entry.action)}
             </div>
-            {idx < history.length - 1 && <div className="w-px flex-1 bg-slate-200 my-1" />}
+            {idx < visibleHistory.length - 1 && <div className="w-px flex-1 bg-slate-200 my-1" />}
           </div>
           {/* Content */}
-          <div className="pb-5 flex-1 min-w-0 pt-0.5">
+          <div className="pb-4 flex-1 min-w-0 pt-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-slate-800">{entry.action}</span>
               {entry.old_value && entry.new_value && (
@@ -327,7 +415,7 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-0.5">
               {entry.performed_by && (
                 <span className="text-xs text-slate-400">by {entry.performed_by}</span>
               )}
@@ -336,6 +424,66 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
           </div>
         </div>
       ))}
+      {hasMore && !showAll && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors ml-8 mt-1"
+        >
+          Show all {history.length} entries
+        </button>
+      )}
+      {hasMore && showAll && (
+        <button
+          onClick={() => setShowAll(false)}
+          className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors ml-8 mt-1"
+        >
+          Show less
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Description with expand/collapse                                     */
+/* ------------------------------------------------------------------ */
+
+function DescriptionSection({ issue }: { issue: Issue }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [needsExpand, setNeedsExpand] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (descRef.current) {
+      setNeedsExpand(descRef.current.scrollHeight > descRef.current.clientHeight + 2);
+    }
+  }, [issue.description]);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <MessageSquare className="w-4 h-4 text-slate-400" />
+        <h3 className="text-sm font-semibold text-slate-900">Description</h3>
+      </div>
+      <p
+        ref={descRef}
+        className={`text-sm text-slate-700 leading-relaxed whitespace-pre-wrap ${
+          !isExpanded ? 'description-clamp' : ''
+        }`}
+      >
+        {issue.description || 'No description provided'}
+      </p>
+      {needsExpand && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors mt-2"
+        >
+          {isExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+      <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
+        Reported by {issue.reported_by_name || issue.reported_by_slack_id}{issue.reported_by_email ? ` (${issue.reported_by_email})` : ''}
+      </div>
     </div>
   );
 }
@@ -354,6 +502,35 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const [assignSearch, setAssignSearch] = useState('');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [successFlash, setSuccessFlash] = useState(false);
+
+  const statusRef = useRef<HTMLDivElement>(null);
+  const teamRef = useRef<HTMLDivElement>(null);
+  const assignRef = useRef<HTMLDivElement>(null);
+
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+      setStatusMenuOpen(false);
+    }
+    if (teamRef.current && !teamRef.current.contains(e.target as Node)) {
+      setTeamMenuOpen(false);
+    }
+    if (assignRef.current && !assignRef.current.contains(e.target as Node)) {
+      setAssignMenuOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (statusMenuOpen || teamMenuOpen || assignMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [statusMenuOpen, teamMenuOpen, assignMenuOpen, handleClickOutside]);
+
+  const triggerSuccessFlash = useCallback(() => {
+    setSuccessFlash(true);
+    setTimeout(() => setSuccessFlash(false), 1000);
+  }, []);
 
   const {
     data: issue,
@@ -363,7 +540,6 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     queryKey: ['issue', issueId],
     queryFn: () => fetchIssue(issueId),
     refetchInterval: (query) => {
-      // Auto-refetch every 3s while RCA is still generating
       const data = query.state.data;
       return data && !data.ai_rca ? 3000 : false;
     },
@@ -375,12 +551,13 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { status: IssueStatus }) => updateIssue(issueId, payload),
+    mutationFn: (payload: { status: IssueStatus; reason?: string }) => updateIssue(issueId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
       setStatusMenuOpen(false);
       setShowCloseModal(false);
+      triggerSuccessFlash();
     },
   });
 
@@ -390,6 +567,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
       setShowResolveModal(false);
+      triggerSuccessFlash();
     },
   });
 
@@ -401,6 +579,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
       setTeamMenuOpen(false);
+      triggerSuccessFlash();
     },
   });
 
@@ -415,16 +594,15 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
       setAssignMenuOpen(false);
       setSelectedAssignees(new Set());
+      triggerSuccessFlash();
     },
   });
 
-  // Fetch all teams for member list
   const { data: allTeams } = useQuery<Team[]>({
     queryKey: ['teams'],
     queryFn: fetchTeams,
   });
 
-  // Fetch members for all teams the user can manage
   const { data: allMembers } = useQuery<{ member: Member; teamName: string }[]>({
     queryKey: ['all-members-for-assign', allTeams?.map(t => t.id).join(',')],
     queryFn: async () => {
@@ -475,7 +653,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const isActiveIssue = issue.status !== 'resolved' && issue.status !== 'closed';
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 animate-page-in ${successFlash ? 'animate-success-flash' : ''}`}>
       {/* Resolve Modal */}
       <ReasonModal
         title="Resolve Issue"
@@ -485,6 +663,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         isPending={resolveMutation.isPending}
         onClose={() => setShowResolveModal(false)}
         onSubmit={(reason) => resolveMutation.mutate(reason)}
+        variant="resolve"
       />
 
       {/* Close Modal */}
@@ -495,43 +674,60 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         open={showCloseModal}
         isPending={updateMutation.isPending}
         onClose={() => setShowCloseModal(false)}
-        onSubmit={() => updateMutation.mutate({ status: 'closed' })}
+        onSubmit={(reason) => updateMutation.mutate({ status: 'closed', reason })}
+        variant="close"
       />
 
-      {/* Header */}
+      {/* Breadcrumb + Header */}
       <div>
-        <button
-          onClick={() => navigate('/issues')}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Issues
-        </button>
-        <h1 className="text-xl font-bold text-slate-900 leading-snug">{issue.title}</h1>
-        <div className="flex items-center gap-3 mt-2">
-          <StatusBadge status={issue.status} size="md" />
-          <PriorityBadge priority={issue.priority} size="md" />
-          <span className="text-sm text-slate-400">Created {timeAgo(issue.created_at)}</span>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-sm text-slate-400 mb-4">
+          <button
+            onClick={() => navigate('/issues')}
+            className="flex items-center gap-1 text-slate-500 hover:text-blue-600 transition-colors font-medium"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Issues
+          </button>
+          <span>/</span>
+          <span className="text-slate-600 font-medium truncate max-w-xs">{issue.title}</span>
         </div>
+
+        {/* Title + badges */}
+        <div className="flex items-start gap-3 flex-wrap">
+          <h1 className="text-xl font-bold text-slate-900 leading-snug flex-1 min-w-0">{issue.title}</h1>
+          <div className="flex items-center gap-2 shrink-0 pt-0.5">
+            <StatusBadge status={issue.status} size="md" />
+            <PriorityBadge priority={issue.priority} size="md" />
+          </div>
+        </div>
+
+        {/* Created info */}
+        <p className="text-sm text-slate-400 mt-2">
+          Created {timeAgo(issue.created_at)}
+          {issue.reported_by_name && (
+            <> by <span className="text-slate-500">{issue.reported_by_name}</span></>
+          )}
+        </p>
       </div>
 
-      {/* Toolbar - Action buttons row */}
+      {/* Floating Toolbar */}
       {canEdit && (
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+        <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Status dropdown */}
-            <div className="relative">
+            <div className="relative" ref={statusRef}>
               <button
                 onClick={() => { setStatusMenuOpen(!statusMenuOpen); setAssignMenuOpen(false); setTeamMenuOpen(false); }}
                 disabled={updateMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
               >
-                {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                {updateMutation.isPending ? 'Updating...' : 'Change Status'}
+                {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 text-slate-500" />}
+                {updateMutation.isPending ? 'Updating...' : 'Status'}
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
               {statusMenuOpen && (
-                <div className="absolute left-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                <div className="absolute left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-20 animate-dropdown overflow-hidden">
                   {allStatuses
                     .filter((s) => s !== issue.status)
                     .map((s) => (
@@ -545,36 +741,36 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                             updateMutation.mutate({ status: s });
                           }
                         }}
-                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
                       >
-                        {statusLabels[s]}
+                        <StatusBadge status={s} />
                       </button>
                     ))}
                 </div>
               )}
             </div>
 
-            {/* Change Team - admin/leader only */}
+            {/* Change Team */}
             {canReassign && allTeams && isActiveIssue && (
-              <div className="relative">
+              <div className="relative" ref={teamRef}>
                 <button
                   onClick={() => { setTeamMenuOpen(!teamMenuOpen); setStatusMenuOpen(false); setAssignMenuOpen(false); }}
                   disabled={teamChangeMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
                 >
-                  {teamChangeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5" />}
-                  {teamChangeMutation.isPending ? 'Moving...' : 'Change Team'}
+                  {teamChangeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />}
+                  {teamChangeMutation.isPending ? 'Moving...' : 'Team'}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 {teamMenuOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <div className="absolute left-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-20 animate-dropdown overflow-hidden">
                     {allTeams
                       .filter(t => t.id !== issue.team_id)
                       .map(t => (
                         <button
                           key={t.id}
                           onClick={() => teamChangeMutation.mutate(t.id)}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg transition-colors"
+                          className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                         >
                           {t.name}
                         </button>
@@ -584,29 +780,28 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               </div>
             )}
 
-            {/* Reassign dropdown - admin/leader only */}
+            {/* Reassign dropdown */}
             {canReassign && allMembers && isActiveIssue && (
-              <div className="relative">
+              <div className="relative" ref={assignRef}>
                 <button
                   onClick={() => {
                     setAssignMenuOpen(!assignMenuOpen);
                     setStatusMenuOpen(false);
                     setTeamMenuOpen(false);
                     setAssignSearch('');
-                    // Pre-select current assignees
                     const current = new Set((issue.assignees || []).map((a: { id: string }) => a.id));
                     if (issue.assigned_to && !current.has(issue.assigned_to)) current.add(issue.assigned_to);
                     setSelectedAssignees(current);
                   }}
                   disabled={assignMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
                 >
-                  {assignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                  {assignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5 text-slate-500" />}
                   {assignMutation.isPending ? 'Assigning...' : 'Assign'}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 {assignMenuOpen && (
-                  <div className="absolute left-0 mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <div className="absolute left-0 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 animate-dropdown overflow-hidden">
                     <div className="p-2 border-b border-slate-100">
                       <input
                         type="text"
@@ -614,7 +809,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                         onChange={(e) => setAssignSearch(e.target.value)}
                         placeholder="Search by name, email, or team..."
                         autoFocus
-                        className="w-full px-3 py-1.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 transition-colors"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 transition-colors bg-slate-50"
                       />
                     </div>
                     <div className="max-h-64 overflow-y-auto">
@@ -661,7 +856,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                               setSelectedAssignees(new Set());
                               assignMutation.mutate([]);
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
                             Unassign all
                           </button>
@@ -674,7 +869,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                             assignMutation.mutate(selected);
                           }}
                           disabled={assignMutation.isPending}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                         >
                           Apply
                         </button>
@@ -693,7 +888,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               <button
                 onClick={() => setShowResolveModal(true)}
                 disabled={resolveMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-all shadow-sm hover:shadow-md active:scale-[0.98]"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
@@ -703,52 +898,92 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         </div>
       )}
 
-      {/* Info Grid - Compact */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <InfoItem
-          icon={<Users className="w-3.5 h-3.5 text-slate-400" />}
-          label="Team"
-          value={issue.team_name || 'Unassigned'}
-        />
-        <InfoItem
-          icon={<User className="w-3.5 h-3.5 text-slate-400" />}
-          label="Assigned To"
-          value={
-            issue.assignees?.length > 0
-              ? issue.assignees.map((a: { name: string }) => a.name).join(', ')
-              : (issue.assignee_name || 'Unassigned')
-          }
-        />
-        <InfoItem
-          icon={<User className="w-3.5 h-3.5 text-slate-400" />}
-          label="Reported By"
-          value={issue.reported_by_name || issue.reported_by_slack_id || 'Unknown'}
-        />
-        <InfoItem
-          icon={<Hash className="w-3.5 h-3.5 text-slate-400" />}
-          label="Channel"
-          value={issue.slack_channel_name ? `#${issue.slack_channel_name}` : (issue.slack_channel_id || 'N/A')}
-        />
-        <InfoItem
-          icon={<Clock className="w-3.5 h-3.5 text-slate-400" />}
-          label="Created"
-          value={formatDate(issue.created_at)}
-        />
+      {/* Info Grid -- Single Card */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Team */}
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-sm text-slate-500">Team</span>
+            </div>
+            <span className="text-sm font-medium text-slate-900 text-right">
+              {issue.team_name ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-400" />
+                  {issue.team_name}
+                </span>
+              ) : (
+                <span className="text-slate-400">Unassigned</span>
+              )}
+            </span>
+          </div>
+
+          {/* Channel */}
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+            <div className="flex items-center gap-1.5">
+              <Hash className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-sm text-slate-500">Channel</span>
+            </div>
+            <span className="text-sm font-medium text-slate-900">
+              {issue.slack_channel_name ? `#${issue.slack_channel_name}` : (issue.slack_channel_id || 'N/A')}
+            </span>
+          </div>
+
+          {/* Assigned to */}
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-sm text-slate-500">Assigned to</span>
+            </div>
+            <div className="flex flex-wrap gap-1 justify-end">
+              {issue.assignees?.length > 0 ? (
+                issue.assignees.map((a: { id: string; name: string }) => (
+                  <AvatarChip key={a.id} name={a.name} />
+                ))
+              ) : (
+                <span className="text-sm font-medium text-slate-400">
+                  {issue.assignee_name || 'Unassigned'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Reported by */}
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-sm text-slate-500">Reported by</span>
+            </div>
+            <span className="text-sm font-medium text-slate-900">
+              {issue.reported_by_name || issue.reported_by_slack_id || 'Unknown'}
+            </span>
+          </div>
+
+          {/* Created */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-sm text-slate-500">Created</span>
+            </div>
+            <span className="text-sm font-medium text-slate-900">{formatDate(issue.created_at)}</span>
+          </div>
+
+          {/* Resolved at (if applicable) */}
+          {issue.resolved_at && (
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                <span className="text-sm text-slate-500">Resolved</span>
+              </div>
+              <span className="text-sm font-medium text-slate-900">{formatDate(issue.resolved_at)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Description */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <MessageSquare className="w-4 h-4 text-slate-400" />
-          <h3 className="text-base font-semibold text-slate-900">Description</h3>
-        </div>
-        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-          {issue.description || 'No description provided'}
-        </p>
-        <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
-          Reported by {issue.reported_by_name || issue.reported_by_slack_id}{issue.reported_by_email ? ` (${issue.reported_by_email})` : ''}
-        </div>
-      </div>
+      <DescriptionSection issue={issue} />
 
       {/* AI RCA */}
       {issue.ai_rca ? (
@@ -760,11 +995,11 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       {/* AI Categorization */}
       {issue.ai_categorization && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center ring-1 ring-teal-100">
               <Tag className="w-4 h-4 text-teal-600" />
             </div>
-            <h3 className="text-base font-semibold text-slate-900">AI Categorization</h3>
+            <h3 className="text-sm font-semibold text-slate-900">AI Categorization</h3>
           </div>
           <div className="space-y-3 text-sm">
             {issue.ai_categorization.reasoning ? (
@@ -799,38 +1034,20 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       {/* History */}
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="px-5 py-4 border-b border-slate-200">
-          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-slate-400" />
-            History
+            <h3 className="text-sm font-semibold text-slate-900">History</h3>
             {history && history.length > 0 && (
-              <span className="text-xs font-normal text-slate-400">({history.length} events)</span>
+              <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                {history.length}
+              </span>
             )}
-          </h3>
+          </div>
         </div>
         <div className="p-5">
           <HistoryTimeline history={history ?? []} />
         </div>
       </div>
-    </div>
-  );
-}
-
-function InfoItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-      <div className="flex items-center gap-1.5 mb-1">
-        {icon}
-        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</span>
-      </div>
-      <p className="text-sm font-medium text-slate-900 truncate" title={value}>{value}</p>
     </div>
   );
 }
