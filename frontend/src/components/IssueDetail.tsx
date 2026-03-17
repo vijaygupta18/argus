@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -28,6 +29,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { fetchIssue, fetchIssueHistory, updateIssue, resolveIssue, fetchTeams, fetchTeamMembers } from '../api/client';
 import type { Issue, IssueHistory as IssueHistoryType, IssueStatus, Member, Team } from '../api/types';
 import StatusBadge from './StatusBadge';
@@ -112,7 +115,7 @@ function ReasonModal({
       ? 'bg-slate-700 hover:bg-slate-800'
       : 'bg-blue-600 hover:bg-blue-700';
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-modal-backdrop bg-black/40">
       <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 animate-modal-content">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
@@ -164,7 +167,8 @@ function ReasonModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -206,12 +210,99 @@ function RCASkeleton() {
 /* RCA Panel                                                           */
 /* ------------------------------------------------------------------ */
 
+function RCAMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => (
+          <h1 className="text-base font-bold text-slate-900 mt-5 mb-2 first:mt-0">{children}</h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="text-sm font-bold text-slate-800 mt-4 mb-2 first:mt-0 flex items-center gap-1.5">
+            <span className="w-1 h-3.5 rounded-full bg-purple-400 shrink-0 inline-block" />
+            {children}
+          </h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-sm font-semibold text-slate-700 mt-3 mb-1.5">{children}</h3>
+        ),
+        p: ({ children }) => (
+          <p className="text-sm text-slate-700 leading-relaxed mb-2 last:mb-0">{children}</p>
+        ),
+        ul: ({ children }) => (
+          <ul className="space-y-1 mb-3 pl-1">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="space-y-1 mb-3 pl-1 list-none counter-reset-item">{children}</ol>
+        ),
+        li: ({ children, ...props }) => {
+          const isOrdered = (props as { ordered?: boolean }).ordered;
+          return (
+            <li className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+              {isOrdered ? (
+                <span className="shrink-0 w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center mt-0.5 tabular-nums">
+                  {(props as { index?: number }).index !== undefined ? ((props as { index?: number }).index ?? 0) + 1 : '•'}
+                </span>
+              ) : (
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-purple-400 mt-2" />
+              )}
+              <span className="flex-1">{children}</span>
+            </li>
+          );
+        },
+        strong: ({ children }) => (
+          <strong className="font-semibold text-slate-900">{children}</strong>
+        ),
+        em: ({ children }) => (
+          <em className="italic text-slate-600">{children}</em>
+        ),
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-');
+          return isBlock ? (
+            <code className="block bg-slate-900 text-green-300 text-xs font-mono p-3 rounded-lg overflow-x-auto mb-3">
+              {children}
+            </code>
+          ) : (
+            <code className="bg-slate-100 text-purple-700 text-[11px] font-mono px-1.5 py-0.5 rounded">
+              {children}
+            </code>
+          );
+        },
+        pre: ({ children }) => <>{children}</>,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-2 border-purple-300 pl-3 my-2 text-slate-600 italic text-sm">
+            {children}
+          </blockquote>
+        ),
+        hr: () => <hr className="border-slate-200 my-4" />,
+        table: ({ children }) => (
+          <div className="overflow-x-auto mb-3">
+            <table className="w-full text-xs border-collapse">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="text-left text-slate-600 font-semibold px-3 py-2 bg-slate-50 border border-slate-200">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="px-3 py-2 border border-slate-200 text-slate-700">{children}</td>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
 function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
   const [expanded, setExpanded] = useState(true);
 
   if (!rca) return null;
 
   const data = typeof rca === 'string' ? (() => { try { return JSON.parse(rca); } catch { return null; } })() : rca;
+  const isVishwakarma = data?.source === 'vishwakarma';
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -224,11 +315,16 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
             <Brain className="w-4 h-4 text-purple-600" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">AI Root Cause Analysis</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-900">AI Root Cause Analysis</h3>
+              {isVishwakarma && (
+                <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-[10px] font-semibold rounded-full ring-1 ring-violet-100">
+                  Vishwakarma · {data?.tools_called || 0} tools
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              {data?.source === 'vishwakarma'
-                ? `Deep investigation · ${data?.tools_called || 0} tools used`
-                : 'Generated analysis and recommendations'}
+              {isVishwakarma ? 'Deep automated investigation' : 'AI-generated analysis and recommendations'}
             </p>
           </div>
         </div>
@@ -238,115 +334,109 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
           <ChevronDown className="w-4 h-4 text-slate-400" />
         )}
       </button>
+
       {expanded && (
-        <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-5">
-          {/* Summary */}
-          {data?.summary && (
-            <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50">
-              <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
+        <div className="border-t border-slate-100">
+          {/* Vishwakarma: render full markdown report */}
+          {isVishwakarma && data?.full_report ? (
+            <div className="px-5 py-4">
+              <RCAMarkdown content={String(data.full_report)} />
             </div>
-          )}
+          ) : (
+            <div className="px-5 pb-5 pt-4 space-y-5">
+              {/* Summary */}
+              {data?.summary && (
+                <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50">
+                  <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
+                </div>
+              )}
 
-          {/* Root Causes */}
-          {data?.root_causes?.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
-                <h4 className="text-sm font-semibold text-slate-800">Root Causes</h4>
-              </div>
-              <div className="space-y-2.5">
-                {data.root_causes.map((rc: { cause: string; probability: string }, i: number) => (
-                  <div key={i} className="flex items-start gap-3 bg-slate-50/50 rounded-lg px-3 py-2.5">
-                    <span className="shrink-0 w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center mt-0.5">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm text-slate-700 leading-relaxed">{rc.cause}</span>
-                    </div>
-                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
-                      rc.probability === 'high' ? 'bg-red-50 text-red-700 ring-1 ring-red-100' :
-                      rc.probability === 'medium' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' :
-                      'bg-green-50 text-green-700 ring-1 ring-green-100'
-                    }`}>{rc.probability}</span>
+              {/* Root Causes */}
+              {data?.root_causes?.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
+                    <h4 className="text-sm font-semibold text-slate-800">Root Causes</h4>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Investigation Steps */}
-          {data?.investigation_steps?.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <SearchIcon className="w-3.5 h-3.5 text-slate-500" />
-                <h4 className="text-sm font-semibold text-slate-800">Investigation Steps</h4>
-              </div>
-              <div className="space-y-1.5">
-                {data.investigation_steps.map((step: string, i: number) => (
-                  <div key={i} className="flex items-start gap-3 py-1.5">
-                    <span className="shrink-0 w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[11px] font-bold flex items-center justify-center mt-0.5 tabular-nums">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm text-slate-700 leading-relaxed">{step}</span>
+                  <div className="space-y-2.5">
+                    {data.root_causes.map((rc: { cause: string; probability: string }, i: number) => (
+                      <div key={i} className="flex items-start gap-3 bg-slate-50/50 rounded-lg px-3 py-2.5">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-slate-700 leading-relaxed">{rc.cause}</span>
+                        </div>
+                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                          rc.probability === 'high' ? 'bg-red-50 text-red-700 ring-1 ring-red-100' :
+                          rc.probability === 'medium' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' :
+                          'bg-green-50 text-green-700 ring-1 ring-green-100'
+                        }`}>{rc.probability}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* Suggested Fixes */}
-          {data?.suggested_fixes?.length > 0 && (
-            <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60">
-              <div className="flex items-center gap-2 mb-3">
-                <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
-                <h4 className="text-sm font-semibold text-emerald-800">Suggested Fixes</h4>
-              </div>
-              <ul className="space-y-2">
-                {data.suggested_fixes.map((fix: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-emerald-800">
-                    <Wrench className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                    <span className="leading-relaxed">{fix}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+              {/* Investigation Steps */}
+              {data?.investigation_steps?.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <SearchIcon className="w-3.5 h-3.5 text-slate-500" />
+                    <h4 className="text-sm font-semibold text-slate-800">Investigation Steps</h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    {data.investigation_steps.map((step: string, i: number) => (
+                      <div key={i} className="flex items-start gap-3 py-1.5">
+                        <span className="shrink-0 w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[11px] font-bold flex items-center justify-center mt-0.5 tabular-nums">
+                          {i + 1}
+                        </span>
+                        <span className="text-sm text-slate-700 leading-relaxed">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Related Systems */}
-          {data?.related_systems?.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Layers className="w-3.5 h-3.5 text-slate-500" />
-                <h4 className="text-sm font-semibold text-slate-800">Related Systems</h4>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {data.related_systems.map((sys: string, i: number) => (
-                  <span
-                    key={i}
-                    className="px-3 py-1.5 bg-slate-50 text-slate-700 text-xs font-medium rounded-lg ring-1 ring-slate-200 hover:bg-slate-100 transition-colors cursor-default"
-                  >
-                    {sys}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+              {/* Suggested Fixes */}
+              {data?.suggested_fixes?.length > 0 && (
+                <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
+                    <h4 className="text-sm font-semibold text-emerald-800">Suggested Fixes</h4>
+                  </div>
+                  <ul className="space-y-2">
+                    {data.suggested_fixes.map((fix: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-emerald-800">
+                        <Wrench className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                        <span className="leading-relaxed">{fix}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-          {/* Vishwakarma full report */}
-          {data?.full_report && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Layers className="w-3.5 h-3.5 text-slate-500" />
-                <h4 className="text-sm font-semibold text-slate-800">Full Investigation Report</h4>
-              </div>
-              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                {String(data.full_report)}
-              </div>
-            </div>
-          )}
+              {/* Related Systems */}
+              {data?.related_systems?.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers className="w-3.5 h-3.5 text-slate-500" />
+                    <h4 className="text-sm font-semibold text-slate-800">Related Systems</h4>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {data.related_systems.map((sys: string, i: number) => (
+                      <span key={i} className="px-3 py-1.5 bg-slate-50 text-slate-700 text-xs font-medium rounded-lg ring-1 ring-slate-200 hover:bg-slate-100 transition-colors cursor-default">
+                        {sys}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {!data && (
-            <p className="text-sm text-slate-500 italic">{typeof rca === 'string' ? rca : JSON.stringify(rca)}</p>
+              {!data && (
+                <p className="text-sm text-slate-500 italic">{typeof rca === 'string' ? rca : JSON.stringify(rca)}</p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -699,6 +789,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         variant="close"
       />
 
+
       {/* Breadcrumb + Header */}
       <div>
         {/* Breadcrumb */}
@@ -755,9 +846,11 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                       <button
                         key={s}
                         onClick={() => {
+                          setStatusMenuOpen(false);
                           if (s === 'closed') {
-                            setStatusMenuOpen(false);
                             setShowCloseModal(true);
+                          } else if (s === 'resolved') {
+                            setShowResolveModal(true);
                           } else {
                             updateMutation.mutate({ status: s });
                           }
