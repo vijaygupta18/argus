@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -104,6 +105,12 @@ function CreateIssueModal({
     },
   });
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -113,9 +120,9 @@ function CreateIssueModal({
     mutation.mutate();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-modal-backdrop bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 animate-modal-content">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -212,7 +219,8 @@ function CreateIssueModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

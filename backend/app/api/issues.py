@@ -2,7 +2,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session_maker
@@ -152,9 +152,17 @@ async def get_issue(
     if issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Kick off RCA in background — don't block the response
+    # Kick off RCA in background — only once (guard: set investigating before spawning)
     if issue.ai_rca is None and settings.ai_api_key:
         import asyncio
+        # Use a fresh session to mark as investigating — avoids greenlet context issues
+        async with async_session_maker() as guard_session:
+            await guard_session.execute(
+                update(Issue)
+                .where(Issue.id == issue.id)
+                .values(ai_rca={"status": "investigating"})
+            )
+            await guard_session.commit()
         team_name = issue.team.name if issue.team else "Unknown"
         asyncio.create_task(_generate_rca_background(
             issue.id, issue.title, issue.description, issue.category or "other", team_name
@@ -176,6 +184,9 @@ async def create_issue(
         description=data.description,
         priority=data.priority,
         team_id=data.team_id,
+        reported_by_name=user.name,
+        reported_by_slack_id=user.slack_user_id,
+        reported_by_email=user.email,
     )
 
     # Reload with relationships

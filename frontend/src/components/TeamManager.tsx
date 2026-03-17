@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -70,11 +71,17 @@ function ConfirmDialog({
   onCancel: () => void;
   isPending: boolean;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-modal-backdrop">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-md mx-4 animate-modal-content">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-md mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h3 className="text-base font-semibold text-slate-900">{title}</h3>
           <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100">
@@ -104,7 +111,8 @@ function ConfirmDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -134,11 +142,17 @@ function EditTeamModal({
     },
   });
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-modal-backdrop">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-lg mx-4 animate-modal-content">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-lg mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h3 className="text-base font-semibold text-slate-900">Edit Team Settings</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100">
@@ -246,7 +260,8 @@ function EditTeamModal({
           )}
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -281,11 +296,17 @@ function AddTeamModal({
     },
   });
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-modal-backdrop">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-lg mx-4 animate-modal-content">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-lg mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Create New Team</h3>
@@ -406,7 +427,8 @@ function AddTeamModal({
           )}
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -476,9 +498,14 @@ function AddMemberOverlay({
     mutation.mutate({ email });
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-modal-backdrop">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-md mx-4 animate-modal-content">
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 w-full max-w-md mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Add Member</h3>
@@ -567,7 +594,8 @@ function AddMemberOverlay({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

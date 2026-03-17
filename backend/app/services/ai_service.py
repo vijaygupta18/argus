@@ -195,19 +195,32 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
                             except json.JSONDecodeError:
                                 continue
 
+                            logger.debug(f"Vishwakarma event={current_event!r} data={current_data[:120]}")
+
                             if current_event == "tool_call_start":
-                                tool_name = data.get("tool_name") or data.get("name", "unknown")
+                                tool_name = (
+                                    data.get("tool_name")
+                                    or data.get("name")
+                                    or data.get("content")
+                                    or data.get("tool")
+                                    or "unknown"
+                                )
                                 tool_calls.append({"tool": tool_name, "status": "running"})
                                 logger.info(f"Vishwakarma tool call: {tool_name}")
 
-                                # Save progress to DB so frontend sees live steps
                                 if issue_id and db_session_maker:
                                     await self._save_rca_progress(
                                         issue_id, db_session_maker, tool_calls, None
                                     )
 
                             elif current_event == "tool_call_result":
-                                tool_name = data.get("tool_name") or data.get("name", "unknown")
+                                tool_name = (
+                                    data.get("tool_name")
+                                    or data.get("name")
+                                    or data.get("content")
+                                    or data.get("tool")
+                                    or "unknown"
+                                )
                                 for tc in reversed(tool_calls):
                                     if tc["tool"] == tool_name and tc["status"] == "running":
                                         tc["status"] = "done"
@@ -218,19 +231,22 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
                                         issue_id, db_session_maker, tool_calls, None
                                     )
 
-                            elif current_event == "analysis_chunk":
-                                chunk = data.get("text") or data.get("chunk", "")
+                            elif current_event in ("analysis_chunk", "text_delta"):
+                                chunk = data.get("text") or data.get("chunk") or data.get("content", "")
                                 analysis_text += chunk
 
                             elif current_event == "analysis_done":
                                 analysis_text = data.get("analysis") or data.get("text") or analysis_text
 
-                            elif current_event == "done":
+                            elif current_event in ("done", "message_stop", "stream_end"):
                                 break
 
                             elif current_event == "error":
                                 logger.error(f"Vishwakarma stream error: {data.get('message')}")
                                 break
+
+                            elif current_event:
+                                logger.warning(f"Vishwakarma unknown event={current_event!r} data={current_data[:200]}")
 
                             current_event = ""
                             current_data = ""

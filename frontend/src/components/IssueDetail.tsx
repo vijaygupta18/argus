@@ -97,6 +97,12 @@ function ReasonModal({
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -116,8 +122,8 @@ function ReasonModal({
       : 'bg-blue-600 hover:bg-blue-700';
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-modal-backdrop bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 animate-modal-content">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 animate-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}>
