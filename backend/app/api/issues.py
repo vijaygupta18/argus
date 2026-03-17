@@ -116,13 +116,16 @@ async def list_issues(
 
 
 async def _generate_rca_background(issue_id: uuid.UUID, title: str, description: str, category: str, team_name: str):
-    """Generate RCA in background and save to DB."""
+    """Generate RCA in background and save to DB. Supports Vishwakarma streaming with live progress."""
     try:
+        # Pass issue_id and session maker so Vishwakarma can save live progress
         rca = await ai_service.generate_rca(
             issue_title=title,
             issue_description=description,
             category=category,
             team_name=team_name,
+            issue_id=issue_id,
+            db_session_maker=async_session_maker,
         )
         async with async_session_maker() as db:
             stmt = select(Issue).where(Issue.id == issue_id)
@@ -130,7 +133,7 @@ async def _generate_rca_background(issue_id: uuid.UUID, title: str, description:
             issue = result.scalar_one_or_none()
             if issue:
                 issue.ai_rca = rca
-                issue.ai_provider_used = settings.ai_provider
+                issue.ai_provider_used = "vishwakarma" if rca.get("source") == "vishwakarma" else settings.ai_provider
                 await db.commit()
                 logger.info(f"Background RCA generated for issue {issue_id}")
     except Exception as e:

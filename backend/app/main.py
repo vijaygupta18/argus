@@ -75,6 +75,64 @@ app.include_router(members.member_router)
 app.include_router(dashboard.router)
 
 
+@app.get("/mock-vishwakarma/api/investigate/stream")
+async def mock_vishwakarma_stream_get():
+    """Mock endpoint hint."""
+    return {"hint": "Use POST"}
+
+
+@app.post("/mock-vishwakarma/api/investigate/stream")
+async def mock_vishwakarma_stream(request: dict):
+    """
+    Mock Vishwakarma SSE stream for local testing.
+    Simulates a ~30s investigation with tool calls.
+    """
+    import json
+    from fastapi.responses import StreamingResponse
+
+    async def event_stream():
+        tools = [
+            ("check_prometheus_metrics", "CPU spike to 95% on driver-worker-3 detected at 14:32 UTC"),
+            ("search_elasticsearch_logs", "Found 2,341 ERROR entries: 'Connection pool exhausted' in ride-service"),
+            ("kubectl_get_pods", "3/5 driver-worker pods in CrashLoopBackOff state"),
+            ("check_postgres_slow_queries", "avg query time spiked from 12ms to 4,200ms — missing index on driver_locations.updated_at"),
+            ("check_redis_memory", "Redis memory at 98% — 847MB used, eviction policy: noeviction"),
+            ("fetch_recent_deployments", "deploy/driver-worker v2.4.1 rolled out 2h before incident — changed pool size 50→10"),
+        ]
+
+        for tool_name, tool_result in tools:
+            yield f"event: tool_call_start\ndata: {json.dumps({'tool_name': tool_name})}\n\n"
+            await asyncio.sleep(3)
+            yield f"event: tool_call_result\ndata: {json.dumps({'tool_name': tool_name, 'result': tool_result})}\n\n"
+            await asyncio.sleep(1)
+
+        analysis = (
+            "## Root Cause Analysis\n\n"
+            "**Primary Cause**: Connection pool misconfiguration in v2.4.1 deployment\n\n"
+            "The deployment of `driver-worker v2.4.1` reduced the PostgreSQL connection pool "
+            "from 50 to 10 connections. Under production load this caused pool exhaustion, "
+            "leading to cascading failures:\n\n"
+            "1. Driver worker pods failed DB health checks\n"
+            "2. Kubernetes marked pods unhealthy → CrashLoopBackOff\n"
+            "3. Reduced pod count amplified connection pressure\n"
+            "4. Redis hit 98% memory from retry storms\n\n"
+            "**Timeline**: Issue began ~2h after deployment during peak traffic.\n\n"
+            "## Recommended Actions\n\n"
+            "1. **Immediate**: Roll back to v2.4.0\n"
+            "2. **Short-term**: Restore pool to 50, add PGBOUNCER\n"
+            "3. **Long-term**: Add pool utilization alerts at 70%"
+        )
+
+        yield f"event: analysis_done\ndata: {json.dumps({'analysis': analysis})}\n\n"
+        yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/api/health")
 async def health():
     """Health check endpoint that verifies DB connectivity."""

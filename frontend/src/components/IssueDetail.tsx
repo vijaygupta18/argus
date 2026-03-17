@@ -225,7 +225,11 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900">AI Root Cause Analysis</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Generated analysis and recommendations</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {data?.source === 'vishwakarma'
+                ? `Deep investigation · ${data?.tools_called || 0} tools used`
+                : 'Generated analysis and recommendations'}
+            </p>
           </div>
         </div>
         {expanded ? (
@@ -324,6 +328,19 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
                     {sys}
                   </span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vishwakarma full report */}
+          {data?.full_report && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <h4 className="text-sm font-semibold text-slate-800">Full Investigation Report</h4>
+              </div>
+              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                {String(data.full_report)}
               </div>
             </div>
           )}
@@ -541,7 +558,11 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     queryFn: () => fetchIssue(issueId),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data && !data.ai_rca ? 3000 : false;
+      if (!data) return 3000;
+      if (!data.ai_rca) return 3000;
+      const rca = data.ai_rca as Record<string, unknown>;
+      if (rca?.status === 'investigating') return 3000;
+      return false;
     },
   });
 
@@ -986,7 +1007,38 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       <DescriptionSection issue={issue} />
 
       {/* AI RCA */}
-      {issue.ai_rca ? (
+      {issue.ai_rca && typeof issue.ai_rca === 'object' && (issue.ai_rca as Record<string, unknown>).status === 'investigating' ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-violet-50 flex items-center justify-center ring-1 ring-purple-100">
+              <Brain className="w-4 h-4 text-purple-600 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">AI Investigating...</h3>
+              <p className="text-xs text-slate-400">
+                {(issue.ai_rca as Record<string, unknown>).tools_called as number || 0} tools checked
+                {((issue.ai_rca as Record<string, unknown>).tools_running as number) > 0 && (
+                  <>, {(issue.ai_rca as Record<string, unknown>).tools_running as number} running</>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {((issue.ai_rca as Record<string, unknown>).tool_details as Array<{tool: string; status: string}> || []).map((t, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                {t.status === 'done' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                ) : (
+                  <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
+                )}
+                <span className={t.status === 'done' ? 'text-slate-500' : 'text-slate-700 font-medium'}>
+                  {t.tool}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : issue.ai_rca ? (
         <RCAPanel rca={issue.ai_rca} />
       ) : (
         <RCASkeleton />

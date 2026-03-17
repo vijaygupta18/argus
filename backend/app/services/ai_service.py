@@ -126,76 +126,167 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
         issue_description: str,
         category: str,
         team_name: str,
+        issue_id=None,
+        db_session_maker=None,
     ) -> dict:
         """
-        Generate root cause analysis. Uses Vishwakarma in production, generic AI locally.
+        Generate root cause analysis. Uses Vishwakarma streaming in production, generic AI locally.
         """
-        # Production: use Vishwakarma SRE agent
         if settings.vishwakarma_url:
-            return await self._generate_rca_vishwakarma(issue_title, issue_description, category, team_name)
-
-        # Local: use generic AI
+            return await self._generate_rca_vishwakarma(
+                issue_title, issue_description, category, team_name,
+                issue_id=issue_id, db_session_maker=db_session_maker,
+            )
         return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
 
     async def _generate_rca_vishwakarma(
-        self, issue_title: str, issue_description: str, category: str, team_name: str
+        self, issue_title: str, issue_description: str, category: str, team_name: str,
+        issue_id=None, db_session_maker=None,
     ) -> dict:
-        """Call Vishwakarma's /api/investigate endpoint for deep RCA."""
+        """
+        Stream Vishwakarma's /api/investigate/stream SSE endpoint.
+        Saves live progress to DB so frontend can show steps in real-time.
+        Falls back to generic AI on failure.
+        """
         import httpx
 
-        question = f"Production issue: {issue_title}\n\nDescription: {issue_description}\nCategory: {category}\nTeam: {team_name}\n\nInvestigate this issue and provide root cause analysis."
+        question = (
+            f"Production issue: {issue_title}\n\n"
+            f"Description: {issue_description}\n"
+            f"Category: {category}\nTeam: {team_name}\n\n"
+            f"Investigate this issue and provide root cause analysis."
+        )
 
         try:
-            headers = {}
+            headers = {"Accept": "text/event-stream"}
             if settings.vishwakarma_api_key:
                 headers["Authorization"] = f"Bearer {settings.vishwakarma_api_key}"
 
-            async with httpx.AsyncClient(timeout=float(settings.vishwakarma_timeout)) as client:
-                resp = await client.post(
-                    f"{settings.vishwakarma_url.rstrip('/')}/api/investigate",
-                    json={"question": question, "stream": False},
+            tool_calls = []
+            analysis_text = ""
+
+            async with httpx.AsyncClient(timeout=httpx.Timeout(float(settings.vishwakarma_timeout), connect=30.0)) as client:
+                async with client.stream(
+                    "POST",
+                    f"{settings.vishwakarma_url.rstrip('/')}/api/investigate/stream",
+                    json={"question": question, "stream": True},
                     headers=headers,
-                )
+                ) as resp:
+                    if resp.status_code != 200:
+                        logger.error(f"Vishwakarma stream returned {resp.status_code}")
+                        return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
 
-            if resp.status_code != 200:
-                logger.error(f"Vishwakarma returned {resp.status_code}: {resp.text[:200]}")
+                    current_event = ""
+                    current_data = ""
+
+                    async for line in resp.aiter_lines():
+                        line = line.strip()
+
+                        if line.startswith("event: "):
+                            current_event = line[7:]
+                            continue
+
+                        if line.startswith("data: "):
+                            current_data = line[6:]
+
+                            # Parse the SSE event
+                            try:
+                                data = json.loads(current_data) if current_data else {}
+                            except json.JSONDecodeError:
+                                continue
+
+                            if current_event == "tool_call_start":
+                                tool_name = data.get("tool_name") or data.get("name", "unknown")
+                                tool_calls.append({"tool": tool_name, "status": "running"})
+                                logger.info(f"Vishwakarma tool call: {tool_name}")
+
+                                # Save progress to DB so frontend sees live steps
+                                if issue_id and db_session_maker:
+                                    await self._save_rca_progress(
+                                        issue_id, db_session_maker, tool_calls, None
+                                    )
+
+                            elif current_event == "tool_call_result":
+                                tool_name = data.get("tool_name") or data.get("name", "unknown")
+                                for tc in reversed(tool_calls):
+                                    if tc["tool"] == tool_name and tc["status"] == "running":
+                                        tc["status"] = "done"
+                                        break
+
+                                if issue_id and db_session_maker:
+                                    await self._save_rca_progress(
+                                        issue_id, db_session_maker, tool_calls, None
+                                    )
+
+                            elif current_event == "analysis_chunk":
+                                chunk = data.get("text") or data.get("chunk", "")
+                                analysis_text += chunk
+
+                            elif current_event == "analysis_done":
+                                analysis_text = data.get("analysis") or data.get("text") or analysis_text
+
+                            elif current_event == "done":
+                                break
+
+                            elif current_event == "error":
+                                logger.error(f"Vishwakarma stream error: {data.get('message')}")
+                                break
+
+                            current_event = ""
+                            current_data = ""
+
+            if not analysis_text:
+                logger.warning("Vishwakarma stream produced no analysis, falling back")
                 return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
 
-            data = resp.json()
-            # Vishwakarma returns InvestigationResult with "analysis" field (markdown RCA)
-            rca_text = data.get("analysis", "")
-            meta = data.get("meta", {})
-            tool_outputs = data.get("tool_outputs", [])
-
-            if not rca_text:
-                logger.warning("Vishwakarma returned empty analysis, falling back to generic AI")
-                return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
-
-            # Extract first paragraph as summary
-            paragraphs = [p.strip() for p in rca_text.split("\n\n") if p.strip()]
-            summary = paragraphs[0] if paragraphs else rca_text[:500]
-            # Strip markdown headers from summary
+            # Extract summary
+            paragraphs = [p.strip() for p in analysis_text.split("\n\n") if p.strip()]
+            summary = paragraphs[0] if paragraphs else analysis_text[:500]
             if summary.startswith("#"):
                 summary = paragraphs[1] if len(paragraphs) > 1 else summary.lstrip("# ")
 
+            tools_used = len([t for t in tool_calls if t["status"] == "done"])
+
             return {
                 "summary": summary,
-                "full_report": rca_text,
+                "full_report": analysis_text,
                 "root_causes": [],
                 "investigation_steps": [],
                 "suggested_fixes": [],
                 "related_systems": [],
                 "source": "vishwakarma",
-                "meta": {
-                    "steps": meta.get("steps"),
-                    "duration_seconds": meta.get("duration_seconds"),
-                    "tools_used": len(tool_outputs),
-                },
+                "tools_called": tools_used,
+                "tool_details": tool_calls,
             }
 
         except Exception as e:
-            logger.error(f"Vishwakarma RCA failed: {e}, falling back to generic AI")
+            logger.error(f"Vishwakarma stream RCA failed: {e}, falling back to generic AI")
             return await self._generate_rca_generic(issue_title, issue_description, category, team_name)
+
+    @staticmethod
+    async def _save_rca_progress(issue_id, db_session_maker, tool_calls: list, analysis: str | None):
+        """Save in-progress RCA to DB so frontend can show live steps."""
+        try:
+            from app.models.issue import Issue
+            async with db_session_maker() as db:
+                from sqlalchemy import select
+                stmt = select(Issue).where(Issue.id == issue_id)
+                result = await db.execute(stmt)
+                issue = result.scalar_one_or_none()
+                if issue:
+                    tools_done = len([t for t in tool_calls if t["status"] == "done"])
+                    tools_running = len([t for t in tool_calls if t["status"] == "running"])
+                    issue.ai_rca = {
+                        "status": "investigating",
+                        "tools_called": tools_done,
+                        "tools_running": tools_running,
+                        "tool_details": tool_calls[-5:],  # last 5 for display
+                        "summary": f"Investigating... {tools_done} tools checked" + (f", {tools_running} running" if tools_running else ""),
+                        "source": "vishwakarma",
+                    }
+                    await db.commit()
+        except Exception as e:
+            logger.debug(f"Failed to save RCA progress: {e}")
 
     async def _generate_rca_generic(
         self, issue_title: str, issue_description: str, category: str, team_name: str
