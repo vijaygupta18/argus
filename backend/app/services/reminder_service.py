@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
+_reminder_lock = False
+
 
 async def check_and_send_reminders():
     """
@@ -30,10 +32,24 @@ async def check_and_send_reminders():
       - last_reminder_sent_at is NULL and time since created_at > team.reminder_frequency_minutes
       - last_reminder_sent_at is not NULL and time since last_reminder_sent_at > team.reminder_frequency_minutes
     """
+    global _reminder_lock
+    if _reminder_lock:
+        logger.debug("Reminder check already in progress, skipping")
+        return
+
     if slack_service.client is None:
         logger.debug("Slack client not configured, skipping reminder check")
         return
 
+    _reminder_lock = True
+    try:
+        await _do_reminder_check()
+    finally:
+        _reminder_lock = False
+
+
+async def _do_reminder_check():
+    """Inner function that performs the actual reminder check."""
     async with async_session_maker() as db:
         try:
             now = datetime.now(timezone.utc)

@@ -16,7 +16,7 @@ class Team(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_frequency_minutes: Mapped[int] = mapped_column(
         Integer, default=1440, server_default="1440"

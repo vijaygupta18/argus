@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import IssueDetail from '../components/IssueDetail';
 
 export default function IssueDetailPage() {
@@ -6,8 +7,9 @@ export default function IssueDetailPage() {
 
   if (!id) {
     return (
-      <div className="p-6 text-center text-slate-500">
-        Issue not found
+      <div className="p-6 text-center">
+        <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <p className="text-sm text-slate-500 font-medium">Issue not found</p>
       </div>
     );
   }

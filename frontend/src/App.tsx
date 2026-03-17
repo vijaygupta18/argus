@@ -7,7 +7,6 @@ import DashboardPage from './pages/DashboardPage';
 import IssuesPage from './pages/IssuesPage';
 import IssueDetailPage from './pages/IssueDetailPage';
 import TeamsPage from './pages/TeamsPage';
-import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import GoogleCallbackPage from './pages/GoogleCallbackPage';
 
@@ -59,7 +58,6 @@ export default function App() {
               <Route path="/issues" element={<IssuesPage />} />
               <Route path="/issues/:id" element={<IssueDetailPage />} />
               <Route path="/teams" element={<TeamsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>
         </AuthProvider>

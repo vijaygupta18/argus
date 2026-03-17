@@ -142,13 +142,3 @@ export async function fetchTeamStats(): Promise<TeamStats[]> {
   return data;
 }
 
-// Config
-export async function fetchConfig(): Promise<Record<string, unknown>> {
-  const { data } = await api.get<Record<string, unknown>>('/config');
-  return data;
-}
-
-export async function updateConfig(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const { data } = await api.patch<Record<string, unknown>>('/config', payload);
-  return data;
-}

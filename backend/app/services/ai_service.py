@@ -89,6 +89,7 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                timeout=30,
             )
 
             content = response.choices[0].message.content or ""
@@ -146,6 +147,7 @@ Keep each array to 3 items max. Be concise."""
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                timeout=60,
             )
 
             content = response.choices[0].message.content or ""

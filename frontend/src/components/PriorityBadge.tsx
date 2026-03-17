@@ -15,7 +15,7 @@ export default function PriorityBadge({ priority, size = 'sm' }: PriorityBadgePr
 
   return (
     <span
-      className={`inline-flex items-center rounded-full font-medium ${colors.bg} ${colors.text} ${sizeClasses}`}
+      className={`inline-flex items-center rounded-full font-medium transition-colors ${colors.bg} ${colors.text} ${sizeClasses}`}
     >
       {label}
     </span>

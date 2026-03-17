@@ -6,6 +6,8 @@ import {
   Loader2,
   AlertTriangle,
   BarChart3,
+  Inbox,
+  TrendingUp,
 } from 'lucide-react';
 import { fetchDashboardStats, fetchTeamStats, fetchIssues } from '../api/client';
 import type { DashboardStats, TeamStats } from '../api/types';
@@ -21,13 +23,13 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon, color }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-300 hover:shadow-sm transition-all duration-200 group">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-slate-500 font-medium">{label}</p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
         </div>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color} group-hover:scale-105 transition-transform duration-200`}>
           {icon}
         </div>
       </div>
@@ -40,23 +42,23 @@ function TeamStatsTable({ teamStats }: { teamStats: TeamStats[] }) {
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-5 py-4 border-b border-slate-200">
         <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-slate-500" />
+          <BarChart3 className="w-4 h-4 text-slate-400" />
           Team Statistics
         </h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-100">
               <th className="px-5 py-3">Team</th>
               <th className="px-5 py-3">Open</th>
               <th className="px-5 py-3">Resolved</th>
               <th className="px-5 py-3">Avg Resolution</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-50">
             {teamStats.map((ts) => (
-              <tr key={ts.team_id} className="hover:bg-slate-50">
+              <tr key={ts.team_id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-5 py-3 text-sm font-medium text-slate-900">
                   {ts.team_name}
                 </td>
@@ -77,8 +79,10 @@ function TeamStatsTable({ teamStats }: { teamStats: TeamStats[] }) {
             ))}
             {teamStats.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">
-                  No team data available
+                <td colSpan={4} className="px-5 py-12 text-center">
+                  <TrendingUp className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm text-slate-400">No team data available yet</p>
+                  <p className="text-xs text-slate-300 mt-1">Team stats will appear once teams are assigned issues</p>
                 </td>
               </tr>
             )}
@@ -94,6 +98,7 @@ export default function Dashboard() {
     data: stats,
     isLoading: statsLoading,
     error: statsError,
+    refetch: refetchStats,
   } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
@@ -114,17 +119,24 @@ export default function Dashboard() {
 
   if (statsLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+        <p className="text-sm text-slate-400">Loading dashboard...</p>
       </div>
     );
   }
 
   if (statsError) {
     return (
-      <div className="flex items-center justify-center h-64 text-red-500">
-        <AlertCircle className="w-5 h-5 mr-2" />
-        Failed to load dashboard stats
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <AlertCircle className="w-8 h-8 text-red-400" />
+        <p className="text-sm text-red-600 font-medium">Failed to load dashboard stats</p>
+        <button
+          onClick={() => refetchStats()}
+          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -187,16 +199,20 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-5 py-4 border-b border-slate-200">
             <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-slate-500" />
+              <AlertCircle className="w-4 h-4 text-slate-400" />
               Recent Issues
             </h2>
           </div>
-          <div className="p-3 space-y-2 max-h-[480px] overflow-y-auto">
+          <div className="divide-y divide-slate-50 max-h-[480px] overflow-y-auto">
             {recentIssues?.items.map((issue) => (
               <IssueCard key={issue.id} issue={issue} />
             ))}
             {(!recentIssues || recentIssues.items.length === 0) && (
-              <p className="text-sm text-slate-400 text-center py-8">No issues found</p>
+              <div className="py-12 text-center">
+                <Inbox className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <p className="text-sm text-slate-400 font-medium">No issues found</p>
+                <p className="text-xs text-slate-300 mt-1">Issues will appear here as they are reported</p>
+              </div>
             )}
           </div>
         </div>

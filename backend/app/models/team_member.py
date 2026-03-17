@@ -1,6 +1,14 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -10,6 +18,15 @@ from app.database import Base
 
 class TeamMember(Base):
     __tablename__ = "team_members"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('leader', 'worker')",
+            name="ck_team_members_role",
+        ),
+        UniqueConstraint("team_id", "email", name="uq_team_members_team_id_email"),
+        Index("ix_team_members_email", "email"),
+        Index("ix_team_members_team_id_is_active", "team_id", "is_active"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

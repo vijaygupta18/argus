@@ -33,16 +33,3 @@ class IssueHistory(Base):
     )
 
     issue = relationship("Issue", back_populates="history")
-
-
-class AppConfig(Base):
-    __tablename__ = "app_config"
-
-    key: Mapped[str] = mapped_column(String(255), primary_key=True)
-    value: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[str] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )

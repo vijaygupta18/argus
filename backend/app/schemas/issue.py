@@ -2,7 +2,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+VALID_STATUSES = {"open", "in_progress", "resolved", "closed"}
+VALID_PRIORITIES = {"low", "medium", "high", "critical"}
 
 
 class IssueBase(BaseModel):
@@ -15,6 +18,13 @@ class IssueCreate(BaseModel):
     description: str
     priority: str | None = None
     team_id: uuid.UUID | None = None
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v):
+        if v is not None and v not in VALID_PRIORITIES:
+            raise ValueError(f"priority must be one of: {', '.join(sorted(VALID_PRIORITIES))}")
+        return v
 
 
 class AssigneeInfo(BaseModel):
@@ -34,6 +44,20 @@ class IssueUpdate(BaseModel):
     assignees: list[AssigneeInfo] | None = None
     notifications_muted: bool | None = None
     reason: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v is not None and v not in VALID_STATUSES:
+            raise ValueError(f"status must be one of: {', '.join(sorted(VALID_STATUSES))}")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v):
+        if v is not None and v not in VALID_PRIORITIES:
+            raise ValueError(f"priority must be one of: {', '.join(sorted(VALID_PRIORITIES))}")
+        return v
 
 
 class IssueResponse(BaseModel):

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -11,9 +11,18 @@ from app.database import Base
 class Issue(Base):
     __tablename__ = "issues"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'resolved', 'closed')",
+            name="ck_issues_status",
+        ),
+        CheckConstraint(
+            "priority IS NULL OR priority IN ('low', 'medium', 'high', 'critical')",
+            name="ck_issues_priority",
+        ),
         Index("ix_issues_status", "status"),
         Index("ix_issues_team_id_status", "team_id", "status"),
         Index("ix_issues_assigned_to_status", "assigned_to", "status"),
+        Index("ix_issues_created_at_desc", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -30,12 +39,12 @@ class Issue(Base):
     category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("teams.id"),
+        ForeignKey("teams.id", ondelete="SET NULL"),
         nullable=True,
     )
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("team_members.id"),
+        ForeignKey("team_members.id", ondelete="SET NULL"),
         nullable=True,
     )
     assignees: Mapped[list] = mapped_column(
@@ -58,7 +67,7 @@ class Issue(Base):
     )
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("team_members.id"),
+        ForeignKey("team_members.id", ondelete="SET NULL"),
         nullable=True,
     )
     notifications_muted: Mapped[bool] = mapped_column(

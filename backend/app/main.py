@@ -65,7 +65,7 @@ app.add_middleware(
 )
 
 # Include all API routers
-from app.api import issues, teams, members, dashboard, config, auth
+from app.api import issues, teams, members, dashboard, auth
 
 app.include_router(auth.router)
 app.include_router(issues.router)
@@ -73,10 +73,18 @@ app.include_router(teams.router)
 app.include_router(members.router)
 app.include_router(members.member_router)
 app.include_router(dashboard.router)
-app.include_router(config.router)
 
 
 @app.get("/api/health")
 async def health():
-    """Health check endpoint."""
-    return {"status": "ok"}
+    """Health check endpoint that verifies DB connectivity."""
+    from app.database import async_session_maker
+    from sqlalchemy import text
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Health check DB probe failed: {e}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content={"status": "unhealthy", "detail": "Database unreachable"})

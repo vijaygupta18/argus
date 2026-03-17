@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/issue_dashboard"
+    db_schema: str = "argus"
+    db_user: str = "db_user"
+    db_name: str = "issue_dashboard"
     slack_bot_token: str = ""
     slack_app_token: str = ""
     slack_signing_secret: str = ""
@@ -22,6 +25,7 @@ class Settings(BaseSettings):
     admin_emails: str = ""  # comma-separated: ADMIN_EMAILS=a@x.com,b@x.com
     jwt_secret: str = "change-me-in-production"
     jwt_expiry_hours: int = 720
+    allowed_email_domain: str = "nammayatri.in"  # restrict logins to this domain; blank = allow all
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:5173/auth/callback"

@@ -102,17 +102,20 @@ async def google_callback(body: GoogleCallbackRequest, db: AsyncSession = Depend
         raise HTTPException(status_code=400, detail="Google OAuth not configured")
 
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
-        token_resp = await client.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "code": body.code,
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
-                "redirect_uri": settings.google_redirect_uri,
-                "grant_type": "authorization_code",
-            },
-        )
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            token_resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "code": body.code,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "redirect_uri": settings.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Google token exchange timed out")
 
     if token_resp.status_code != 200:
         logger.error(f"Google token exchange failed: {token_resp.text}")
@@ -125,11 +128,14 @@ async def google_callback(body: GoogleCallbackRequest, db: AsyncSession = Depend
         raise HTTPException(status_code=400, detail="No access token from Google")
 
     # Get user info
-    async with httpx.AsyncClient() as client:
-        userinfo_resp = await client.get(
-            GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            userinfo_resp = await client.get(
+                GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Google userinfo request timed out")
 
     if userinfo_resp.status_code != 200:
         raise HTTPException(status_code=400, detail="Failed to get user info from Google")
@@ -140,6 +146,13 @@ async def google_callback(body: GoogleCallbackRequest, db: AsyncSession = Depend
 
     if not email:
         raise HTTPException(status_code=400, detail="No email from Google")
+
+    # Enforce email domain restriction
+    if settings.allowed_email_domain:
+        domain = email.rsplit("@", 1)[-1].lower()
+        if domain != settings.allowed_email_domain.lower():
+            logger.warning(f"Login rejected for email {email}: domain {domain} not allowed")
+            raise HTTPException(status_code=403, detail=f"Only @{settings.allowed_email_domain} emails are allowed")
 
     logger.info(f"Google login: {email} ({name})")
     return await _login_user(email, name, db)

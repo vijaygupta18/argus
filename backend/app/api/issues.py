@@ -252,6 +252,60 @@ async def update_issue(
     except ValueError:
         raise HTTPException(status_code=404, detail="Issue not found")
 
+    # --- Adjust open_issue_count for assignment changes ---
+    from app.services.assignment_service import release_assignment
+
+    # Handle primary assignee change
+    new_assigned_to_id = str(issue.assigned_to) if issue.assigned_to else ""
+    if old_assigned_to_id and old_assigned_to_id != new_assigned_to_id:
+        # Old primary assignee lost assignment -> decrement
+        try:
+            await release_assignment(db, uuid.UUID(old_assigned_to_id))
+        except Exception as e:
+            logger.warning(f"Failed to release old assignee {old_assigned_to_id}: {e}")
+    if new_assigned_to_id and old_assigned_to_id != new_assigned_to_id:
+        # New primary assignee gained assignment -> increment
+        stmt = select(TeamMember).where(TeamMember.id == issue.assigned_to)
+        r = await db.execute(stmt)
+        new_member = r.scalar_one_or_none()
+        if new_member:
+            new_member.open_issue_count += 1
+            new_member.total_assigned_count += 1
+            await db.flush()
+
+    # Handle secondary assignees change
+    if "assignees" in update_data:
+        old_assignee_ids = {a.get("id") for a in (old_issue.assignees or []) if isinstance(a, dict) and a.get("id")}
+        new_assignee_ids = set()
+        for a in (update_data["assignees"] or []):
+            if isinstance(a, dict):
+                new_assignee_ids.add(a.get("id"))
+            elif hasattr(a, "id"):
+                new_assignee_ids.add(a.id)
+        new_assignee_ids.discard(None)
+
+        # Decrement for removed secondary assignees (skip primary, handled above)
+        for removed_id in old_assignee_ids - new_assignee_ids:
+            if removed_id != old_assigned_to_id:
+                try:
+                    await release_assignment(db, uuid.UUID(removed_id))
+                except Exception as e:
+                    logger.warning(f"Failed to release removed secondary assignee {removed_id}: {e}")
+
+        # Increment for added secondary assignees (skip primary, handled above)
+        for added_id in new_assignee_ids - old_assignee_ids:
+            if added_id != new_assigned_to_id:
+                try:
+                    stmt = select(TeamMember).where(TeamMember.id == uuid.UUID(added_id))
+                    r = await db.execute(stmt)
+                    member = r.scalar_one_or_none()
+                    if member:
+                        member.open_issue_count += 1
+                        member.total_assigned_count += 1
+                        await db.flush()
+                except Exception as e:
+                    logger.warning(f"Failed to increment for added secondary assignee {added_id}: {e}")
+
     # Record close reason in history if provided
     if new_status == "closed" and reason_text:
         await issue_service.add_history(
@@ -325,8 +379,8 @@ async def update_issue(
                 await slack_service.post_dm(
                     user_id=slack_uid,
                     text="",
-                attachments=dm_attachments,
-            )
+                    attachments=dm_attachments,
+                )
         except Exception as e:
             logger.error(f"Failed to DM assignee for issue {issue_id}: {e}")
 
@@ -401,10 +455,20 @@ async def resolve_issue(
     except ValueError:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Release assignment if there was an assignee
+    # Release assignment for ALL assignees (primary + secondary)
+    from app.services.assignment_service import release_assignment
+    released_ids = set()
     if issue.assigned_to:
-        from app.services.assignment_service import release_assignment
         await release_assignment(db, issue.assigned_to)
+        released_ids.add(str(issue.assigned_to))
+    for a in (issue.assignees or []):
+        assignee_id = a.get("id")
+        if assignee_id and assignee_id not in released_ids:
+            try:
+                await release_assignment(db, uuid.UUID(assignee_id))
+                released_ids.add(assignee_id)
+            except (ValueError, Exception) as e:
+                logger.warning(f"Failed to release assignment for secondary assignee {assignee_id}: {e}")
 
     # Notify in Slack thread
     if issue.slack_channel_id and issue.slack_thread_ts:

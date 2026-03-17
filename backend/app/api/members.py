@@ -76,13 +76,14 @@ async def add_member(
     # Auto-resolve Slack user ID from email if not provided
     if not slack_user_id and email:
         from app.services.slack_service import slack_service
-        user_info = await slack_service.lookup_by_email(email)
-        if user_info:
-            slack_user_id = user_info["id"]
-            if not name or name == email:
-                name = user_info["name"]
-        else:
-            raise HTTPException(status_code=400, detail=f"Could not find Slack user for email: {email}")
+        if slack_service.client is not None:
+            user_info = await slack_service.lookup_by_email(email)
+            if user_info:
+                slack_user_id = user_info["id"]
+                if not name or name == email:
+                    name = user_info["name"]
+            else:
+                raise HTTPException(status_code=400, detail=f"Could not find Slack user for email: {email}")
 
     # Auto-resolve name and email from Slack ID if we have one
     if slack_user_id and (not name or not email):
@@ -93,11 +94,25 @@ async def add_member(
         if not email:
             email = user_info.get("email")
 
+    # Check for duplicate member (same email in same team)
+    if email:
+        dup_stmt = select(TeamMember).where(
+            TeamMember.team_id == team_id,
+            TeamMember.email == email.strip().lower(),
+        )
+        dup_result = await db.execute(dup_stmt)
+        if dup_result.scalar_one_or_none() is not None:
+            raise HTTPException(status_code=409, detail=f"A member with email {email} already exists in this team")
+
+    # Ensure name has a value
+    if not name:
+        name = email.split("@")[0] if email else "Unknown"
+
     member = TeamMember(
         team_id=team_id,
         name=name,
         slack_user_id=slack_user_id or "",
-        email=email,
+        email=email.strip().lower() if email else email,
         role=role,
     )
     db.add(member)

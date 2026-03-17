@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from slack_sdk.web.async_client import AsyncWebClient
@@ -6,6 +7,8 @@ from slack_sdk.errors import SlackApiError
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 2
 
 
 class SlackService:
@@ -16,9 +19,26 @@ class SlackService:
             self.client = None
             logger.warning("Slack bot token not configured; Slack integration is disabled.")
 
-    def _check_client(self) -> None:
+    def _check_client(self) -> bool:
+        """Return True if client is available, False otherwise. Never raises."""
         if self.client is None:
-            raise RuntimeError("Slack client is not configured. Set SLACK_BOT_TOKEN.")
+            logger.debug("Slack client not configured, skipping operation.")
+            return False
+        return True
+
+    @staticmethod
+    async def _retry_on_rate_limit(coro_factory, description: str = "Slack API call"):
+        """Retry a Slack API call if rate-limited (429). coro_factory is a zero-arg callable returning a coroutine."""
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return await coro_factory()
+            except SlackApiError as e:
+                if e.response.status_code == 429 and attempt < _MAX_RETRIES:
+                    retry_after = int(e.response.headers.get("Retry-After", 1))
+                    logger.warning(f"Rate limited on {description}, retrying after {retry_after}s (attempt {attempt + 1})")
+                    await asyncio.sleep(retry_after)
+                    continue
+                raise
 
     async def post_thread_message(
         self,
@@ -29,7 +49,8 @@ class SlackService:
         attachments: list[dict] | None = None,
     ) -> dict | None:
         """Post a message in a Slack thread."""
-        self._check_client()
+        if not self._check_client():
+            return None
         try:
             kwargs: dict = {
                 "channel": channel,
@@ -40,7 +61,10 @@ class SlackService:
                 kwargs["blocks"] = blocks
             if attachments:
                 kwargs["attachments"] = attachments
-            response = await self.client.chat_postMessage(**kwargs)
+            response = await self._retry_on_rate_limit(
+                lambda: self.client.chat_postMessage(**kwargs),
+                description="post_thread_message",
+            )
             return response.data
         except SlackApiError as e:
             logger.error(f"Failed to post thread message: {e.response['error']}")
@@ -53,7 +77,8 @@ class SlackService:
         blocks: list[dict] | None = None,
     ) -> dict | None:
         """Post a message to a Slack channel."""
-        self._check_client()
+        if not self._check_client():
+            return None
         try:
             response = await self.client.chat_postMessage(
                 channel=channel,
@@ -73,16 +98,23 @@ class SlackService:
         attachments: list[dict] | None = None,
     ) -> dict | None:
         """Send a DM to a user by opening a conversation and posting."""
-        self._check_client()
+        if not self._check_client():
+            return None
         try:
-            conv = await self.client.conversations_open(users=[user_id])
+            conv = await self._retry_on_rate_limit(
+                lambda: self.client.conversations_open(users=[user_id]),
+                description="conversations_open",
+            )
             channel_id = conv.data["channel"]["id"]
             kwargs: dict = {"channel": channel_id, "text": text}
             if blocks:
                 kwargs["blocks"] = blocks
             if attachments:
                 kwargs["attachments"] = attachments
-            response = await self.client.chat_postMessage(**kwargs)
+            response = await self._retry_on_rate_limit(
+                lambda: self.client.chat_postMessage(**kwargs),
+                description="post_dm",
+            )
             return response.data
         except SlackApiError as e:
             logger.error(f"Failed to DM user {user_id}: {e.response['error']}")
@@ -92,7 +124,8 @@ class SlackService:
         self, channel: str, timestamp: str, emoji: str
     ) -> bool:
         """Add an emoji reaction to a message."""
-        self._check_client()
+        if not self._check_client():
+            return False
         try:
             await self.client.reactions_add(
                 channel=channel,
@@ -111,7 +144,8 @@ class SlackService:
         self, channel: str, timestamp: str, emoji: str
     ) -> bool:
         """Remove an emoji reaction from a message."""
-        self._check_client()
+        if not self._check_client():
+            return False
         try:
             await self.client.reactions_remove(
                 channel=channel,
@@ -127,7 +161,8 @@ class SlackService:
 
     async def get_user_info(self, user_id: str) -> dict:
         """Get Slack user info by user ID."""
-        self._check_client()
+        if not self._check_client():
+            return {"id": user_id, "name": "Unknown", "email": None, "display_name": ""}
         try:
             response = await self.client.users_info(user=user_id)
             user = response.data.get("user", {})
@@ -143,7 +178,8 @@ class SlackService:
 
     async def get_channel_name(self, channel_id: str) -> str:
         """Get channel name from channel ID."""
-        self._check_client()
+        if not self._check_client():
+            return channel_id
         try:
             response = await self.client.conversations_info(channel=channel_id)
             return response.data.get("channel", {}).get("name", channel_id)
@@ -152,7 +188,8 @@ class SlackService:
 
     async def lookup_by_email(self, email: str) -> dict | None:
         """Look up a Slack user by email. Returns user info dict or None."""
-        self._check_client()
+        if not self._check_client():
+            return None
         try:
             response = await self.client.users_lookupByEmail(email=email)
             user = response.data.get("user", {})
@@ -176,6 +213,8 @@ class SlackService:
         resolved_by: str | None = None,
     ) -> dict | None:
         """Post a resolution notification in a thread."""
+        if not self._check_client():
+            return None
         resolved_text = f"by *{resolved_by}*" if resolved_by else ""
         text = f":white_check_mark: *Issue Resolved* {resolved_text}\n*{title}*"
 
