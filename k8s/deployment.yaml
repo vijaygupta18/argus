@@ -1,0 +1,117 @@
+---
+# ============================================
+# Argus - Template Deployment (single container)
+# Replace all {{PLACEHOLDERS}} before applying
+# ============================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argus-config
+  namespace: {{NAMESPACE}}
+data:
+  AI_PROVIDER: "{{AI_PROVIDER}}"
+  AI_MODEL: "{{AI_MODEL}}"
+  AI_FAST_MODEL: "{{AI_FAST_MODEL}}"
+  AI_API_BASE: "{{AI_API_BASE}}"
+  AI_MAX_TOKENS: "{{AI_MAX_TOKENS}}"
+  AI_TEMPERATURE: "{{AI_TEMPERATURE}}"
+  APP_BASE_URL: "{{APP_BASE_URL}}"
+  DEFAULT_REMINDER_FREQUENCY_MINUTES: "{{REMINDER_FREQ}}"
+  CORS_ORIGINS: "{{APP_BASE_URL}}"
+  ADMIN_EMAILS: "{{ADMIN_EMAILS}}"
+  JWT_EXPIRY_HOURS: "{{JWT_EXPIRY_HOURS}}"
+  ALLOWED_EMAIL_DOMAIN: "{{ALLOWED_EMAIL_DOMAIN}}"
+  GOOGLE_REDIRECT_URI: "{{APP_BASE_URL}}/auth/callback"
+  VISHWAKARMA_URL: "{{VISHWAKARMA_URL}}"
+  VISHWAKARMA_TIMEOUT: "{{VISHWAKARMA_TIMEOUT}}"
+  DB_SCHEMA: "{{DB_SCHEMA}}"
+  DB_USER: "{{DB_USER}}"
+  DB_NAME: "{{DB_NAME}}"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argus-secrets
+  namespace: {{NAMESPACE}}
+type: Opaque
+stringData:
+  DATABASE_URL: "{{DATABASE_URL}}"
+  AI_API_KEY: "{{AI_API_KEY}}"
+  SLACK_BOT_TOKEN: "{{SLACK_BOT_TOKEN}}"
+  SLACK_APP_TOKEN: "{{SLACK_APP_TOKEN}}"
+  SLACK_SIGNING_SECRET: "{{SLACK_SIGNING_SECRET}}"
+  JWT_SECRET: "{{JWT_SECRET}}"
+  GOOGLE_CLIENT_ID: "{{GOOGLE_CLIENT_ID}}"
+  GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
+  VISHWAKARMA_API_KEY: "{{VISHWAKARMA_API_KEY}}"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus
+  namespace: {{NAMESPACE}}
+  labels:
+    app: argus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: argus
+  template:
+    metadata:
+      labels:
+        app: argus
+    spec:
+      containers:
+        - name: argus
+          image: {{ECR_REGISTRY}}/argus:{{IMAGE_TAG}}
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: argus
+  namespace: {{NAMESPACE}}
+  labels:
+    app: argus
+spec:
+  type: ClusterIP
+  selector:
+    app: argus
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

@@ -146,3 +146,32 @@ async def health():
         logger.error(f"Health check DB probe failed: {e}")
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=503, content={"status": "unhealthy", "detail": "Database unreachable"})
+
+
+# --- Serve frontend static files (production) ---
+import os
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+_static_dir = Path(__file__).resolve().parent.parent / "static"
+if _static_dir.exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="static-assets")
+
+    # Serve any other static files (favicon, etc.)
+    @app.get("/vite.svg")
+    async def vite_svg():
+        return FileResponse(str(_static_dir / "vite.svg"))
+
+    # SPA fallback — serve index.html for all non-API routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Don't serve index.html for API/mock routes
+        if full_path.startswith("api/") or full_path.startswith("mock-"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        file_path = _static_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_static_dir / "index.html"))
