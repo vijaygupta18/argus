@@ -617,22 +617,17 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
   const [showDeleteTeamConfirm, setShowDeleteTeamConfirm] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
 
+  // Single query for members — always fetch (lightweight), used for both summary stats and expanded list
   const { data: members, isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: ['team-members', team.id],
     queryFn: () => fetchTeamMembers(team.id),
-    enabled: expanded,
   });
 
-  const { data: membersSummary } = useQuery<Member[]>({
-    queryKey: ['team-members', team.id],
-    queryFn: () => fetchTeamMembers(team.id),
-  });
-
-  const memberCount = membersSummary?.length ?? 0;
-  const activeMembers = membersSummary?.filter(m => m.is_active) ?? [];
+  const memberCount = members?.length ?? 0;
+  const activeMembers = members?.filter(m => m.is_active) ?? [];
   const activeMemberCount = activeMembers.length;
-  const openIssueCount = membersSummary?.reduce((sum, m) => sum + m.open_issue_count, 0) ?? 0;
-  const resolvedCount = membersSummary?.reduce((sum, m) => sum + (m.total_assigned_count - m.open_issue_count), 0) ?? 0;
+  const openIssueCount = members?.reduce((sum, m) => sum + m.open_issue_count, 0) ?? 0;
+  const resolvedCount = members?.reduce((sum, m) => sum + (m.total_assigned_count - m.open_issue_count), 0) ?? 0;
   const memberNames = activeMembers.map(m => m.name);
 
   const accent = TEAM_ACCENT_COLORS[index % TEAM_ACCENT_COLORS.length];
@@ -948,7 +943,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
       {showAddMember && (
         <AddMemberOverlay
           teamId={team.id}
-          existingEmails={new Set(membersSummary?.map(m => m.email).filter(Boolean) as string[] || [])}
+          existingEmails={new Set(members?.map(m => m.email).filter(Boolean) as string[] || [])}
           onClose={() => setShowAddMember(false)}
         />
       )}

@@ -72,14 +72,20 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
 
 async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncSession) -> bool:
     """Check if the issue is assigned to a team member whose email matches the user."""
-    if not issue.assigned_to:
-        return False
-    stmt = select(TeamMember).where(TeamMember.id == issue.assigned_to)
-    result = await db.execute(stmt)
-    assignee = result.scalar_one_or_none()
-    if assignee is None:
-        return False
-    return assignee.email == user.email
+    # Check primary assignee
+    if issue.assigned_to:
+        stmt = select(TeamMember).where(TeamMember.id == issue.assigned_to)
+        result = await db.execute(stmt)
+        assignee = result.scalar_one_or_none()
+        if assignee and assignee.email == user.email:
+            return True
+    # Check multi-assignees JSONB array
+    for a in (issue.assignees or []):
+        if isinstance(a, dict) and a.get("slack_user_id") == user.slack_user_id:
+            return True
+        if isinstance(a, dict) and a.get("name") == user.name:
+            return True
+    return False
 
 
 def _issue_to_list_item(issue: Issue) -> IssueListItem:
@@ -197,7 +203,9 @@ async def create_issue(
     db: AsyncSession = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    """Create a new issue via API."""
+    """Create a new issue via API. Readers cannot create."""
+    if not user.is_admin and not user.team_roles:
+        raise HTTPException(status_code=403, detail="Readers cannot create issues")
     issue = await issue_service.create_issue(
         db,
         title=data.title,

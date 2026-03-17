@@ -77,7 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (issue: Issue) => {
       if (isAdmin) return true;
       if (issue.team_id && user?.roles[issue.team_id] === 'leader') return true;
+      // Check primary assignee
       if (issue.assignee_name && user?.name && issue.assignee_name === user.name) return true;
+      // Check multi-assignees
+      if (issue.assignees?.some((a: { name: string }) => a.name === user?.name)) return true;
       return false;
     },
     [isAdmin, user]

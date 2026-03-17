@@ -365,8 +365,8 @@ export default function IssuesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin, user } = useAuth();
-  const isLeader = user && Object.values(user.roles).includes('leader');
-  const canCreate = isAdmin || isLeader;
+  const hasTeamRole = user && Object.keys(user.roles).length > 0;
+  const canCreate = isAdmin || hasTeamRole;  // Anyone with a team role can create; readers cannot
 
   const statusFilter = (searchParams.get('status') as IssueStatus) || '';
   const teamFilter = searchParams.get('team_id') || '';
