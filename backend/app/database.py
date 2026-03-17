@@ -12,9 +12,10 @@ if settings.db_schema:
 engine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_size=20,
-    max_overflow=10,
+    pool_size=3,
+    max_overflow=5,
     pool_pre_ping=True,
+    pool_recycle=600,
     connect_args=_connect_args,
 )
 

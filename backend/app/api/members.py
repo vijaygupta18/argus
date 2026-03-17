@@ -117,6 +117,7 @@ async def add_member(
     )
     db.add(member)
     await db.flush()
+    await db.refresh(member)
 
     logger.info(f"Added member {member.name} (role={role}) to team {team_id} (id={member.id}, slack={slack_user_id}) by {user.email}")
     return MemberResponse.model_validate(member)
@@ -176,6 +177,7 @@ async def update_member(
         setattr(member, field, value)
 
     await db.flush()
+    await db.refresh(member)
     logger.info(f"Updated member {member_id}: fields={list(update_data.keys())} by {user.email}")
     return MemberResponse.model_validate(member)
 

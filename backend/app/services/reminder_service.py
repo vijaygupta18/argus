@@ -50,11 +50,12 @@ async def check_and_send_reminders():
 
 async def _do_reminder_check():
     """Inner function that performs the actual reminder check."""
+    now = datetime.now(timezone.utc)
+
+    # Phase 1: Quick read — get issues needing reminders, release connection immediately
+    issues_to_remind = []
     async with async_session_maker() as db:
         try:
-            now = datetime.now(timezone.utc)
-
-            # Query issues that are open or in progress, with team info
             stmt = (
                 select(Issue)
                 .join(Team, Issue.team_id == Team.id)
@@ -76,71 +77,82 @@ async def _do_reminder_check():
             result = await db.execute(stmt)
             issues = result.unique().scalars().all()
 
-            reminders_sent = 0
-
             for issue in issues:
                 team = issue.team
                 if team is None:
                     continue
 
                 frequency_minutes = team.reminder_frequency_minutes
-
-                # Determine time reference: last reminder or creation time
                 reference_time = issue.last_reminder_sent_at or issue.created_at
 
-                # Parse reference_time if it's a string
                 if isinstance(reference_time, str):
                     try:
                         reference_time = datetime.fromisoformat(reference_time)
                     except (ValueError, TypeError):
                         continue
 
-                # Make sure reference_time is timezone-aware
                 if reference_time.tzinfo is None:
                     reference_time = reference_time.replace(tzinfo=timezone.utc)
 
                 elapsed_minutes = (now - reference_time).total_seconds() / 60
-
                 if elapsed_minutes < frequency_minutes:
                     continue
 
-                # Check if current hour is within reminder hours (respect reminder_start_hour)
                 current_hour = now.hour
                 if current_hour < team.reminder_start_hour:
                     continue
 
-                # Build and send reminder with Block Kit
-                assignee = issue.assignee
-                fallback, attachments = format_reminder_blocks(issue, assignee, settings.app_base_url)
-
-                sent = await slack_service.post_thread_message(
-                    channel=issue.slack_channel_id,
-                    thread_ts=issue.slack_thread_ts,
-                    text="",
-                    attachments=attachments,
-                )
-
-                if sent:
-                    issue.last_reminder_sent_at = now
-
-                    history = IssueHistory(
-                        issue_id=issue.id,
-                        action="reminder_sent",
-                        new_value=f"Reminder sent at {now.isoformat()}",
-                        performed_by="scheduler",
-                    )
-                    db.add(history)
-
-                    reminders_sent += 1
-                    logger.info(f"Sent reminder for issue {issue.id}: {issue.title}")
-
-            if reminders_sent > 0:
-                await db.commit()
-                logger.info(f"Sent {reminders_sent} reminders")
+                issues_to_remind.append({
+                    "id": issue.id,
+                    "title": issue.title,
+                    "channel": issue.slack_channel_id,
+                    "thread_ts": issue.slack_thread_ts,
+                    "issue": issue,
+                    "assignee": issue.assignee,
+                })
 
         except Exception as e:
-            logger.error(f"Error in reminder check: {e}", exc_info=True)
-            await db.rollback()
+            logger.error(f"Error reading issues for reminders: {e}", exc_info=True)
+            return
+
+    # Phase 2: Send Slack messages OUTSIDE any DB transaction
+    sent_issue_ids = []
+    for item in issues_to_remind:
+        try:
+            fallback, attachments = format_reminder_blocks(item["issue"], item["assignee"], settings.app_base_url)
+            sent = await slack_service.post_thread_message(
+                channel=item["channel"],
+                thread_ts=item["thread_ts"],
+                text="",
+                attachments=attachments,
+            )
+            if sent:
+                sent_issue_ids.append(item["id"])
+                logger.info(f"Sent reminder for issue {item['id']}: {item['title']}")
+        except Exception as e:
+            logger.error(f"Failed to send reminder for {item['id']}: {e}")
+
+    # Phase 3: Quick write — update timestamps, release connection immediately
+    if sent_issue_ids:
+        async with async_session_maker() as db:
+            try:
+                for issue_id in sent_issue_ids:
+                    stmt = select(Issue).where(Issue.id == issue_id)
+                    result = await db.execute(stmt)
+                    issue = result.scalar_one_or_none()
+                    if issue:
+                        issue.last_reminder_sent_at = now
+                        db.add(IssueHistory(
+                            issue_id=issue_id,
+                            action="reminder_sent",
+                            new_value=f"Reminder sent at {now.isoformat()}",
+                            performed_by="scheduler",
+                        ))
+                await db.commit()
+                logger.info(f"Sent {len(sent_issue_ids)} reminders")
+            except Exception as e:
+                logger.error(f"Error saving reminder state: {e}", exc_info=True)
+                await db.rollback()
 
 
 def start_scheduler():

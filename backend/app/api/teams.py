@@ -41,6 +41,7 @@ async def create_team(
     )
     db.add(team)
     await db.flush()
+    await db.refresh(team)
 
     logger.info(f"Created team: {team.name} (id={team.id}) by {user.email}")
     return TeamResponse.model_validate(team)
@@ -90,6 +91,7 @@ async def update_team(
         setattr(team, field, value)
 
     await db.flush()
+    await db.refresh(team)
     logger.info(f"Updated team {team_id}: fields={list(update_data.keys())} by {user.email}")
     return TeamResponse.model_validate(team)
 
