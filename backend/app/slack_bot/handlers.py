@@ -138,7 +138,7 @@ def register_handlers(app):
                                     {"type": "mrkdwn", "text": f"*Priority:* {PRIORITY_EMOJI.get(p, '')} {p.title()}"},
                                     {"type": "mrkdwn", "text": f"*Team:* {matched_team.name}"},
                                     {"type": "mrkdwn", "text": f"*Channel:* #{channel_name}"},
-                                    {"type": "mrkdwn", "text": f"*Reported by:* {reporter_name}"},
+                                    {"type": "mrkdwn", "text": f"*Reported by:* <@{user_id}>"},
                                 ]},
                                 {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
                             ],

@@ -104,12 +104,37 @@ async def update_issue(
 
         if old_str != new_str:
             setattr(issue, field, new_value)
+
+            # Resolve to readable names for history
+            display_old = old_str
+            display_new = new_str
+            if field in ("assigned_to", "team_id", "resolved_by"):
+                from app.models.team_member import TeamMember
+                from app.models.team import Team
+                model = Team if field == "team_id" else TeamMember
+                if old_value:
+                    r = await db.execute(select(model).where(model.id == old_value))
+                    obj = r.scalar_one_or_none()
+                    display_old = obj.name if obj else old_str
+                if new_value:
+                    r = await db.execute(select(model).where(model.id == new_value))
+                    obj = r.scalar_one_or_none()
+                    display_new = obj.name if obj else new_str
+            elif field == "assignees":
+                # Extract just names from the assignees list
+                def _names(val):
+                    if isinstance(val, list):
+                        names = [a.get("name") or a.get("id", "?") for a in val if isinstance(a, dict)]
+                        return ", ".join(names) if names else "None"
+                    return "None"
+                display_old = _names(old_value)
+                display_new = _names(new_value)
             await add_history(
                 db,
                 issue_id,
                 action=f"updated_{field}",
-                old_value=old_str,
-                new_value=new_str,
+                old_value=display_old,
+                new_value=display_new,
                 performed_by=actor,
             )
 

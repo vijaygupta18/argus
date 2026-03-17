@@ -260,6 +260,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const { canEditIssue, isAdmin, isLeaderOf } = useAuth();
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [assignMenuOpen, setAssignMenuOpen] = useState(false);
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
   const [assignSearch, setAssignSearch] = useState('');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -302,12 +303,28 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     },
   });
 
+  const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
+
+  const teamChangeMutation = useMutation({
+    mutationFn: (teamId: string) => updateIssue(issueId, { team_id: teamId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
+      queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+      setTeamMenuOpen(false);
+    },
+  });
+
   const assignMutation = useMutation({
-    mutationFn: (memberId: string | null) => updateIssue(issueId, { assigned_to: memberId }),
+    mutationFn: (members: { id: string; name: string; slack_user_id?: string }[]) => {
+      const primary = members[0]?.id || null;
+      const assigneesPayload = members.map(m => ({ id: m.id, name: m.name, slack_user_id: m.slack_user_id }));
+      return updateIssue(issueId, { assigned_to: primary, assignees: assigneesPayload } as Record<string, unknown>);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
       setAssignMenuOpen(false);
+      setSelectedAssignees(new Set());
     },
   });
 
@@ -322,11 +339,13 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     queryKey: ['all-members-for-assign', allTeams?.map(t => t.id).join(',')],
     queryFn: async () => {
       if (!allTeams) return [];
+      const seen = new Set<string>();
       const results: { member: Member; teamName: string }[] = [];
       for (const team of allTeams) {
         const members = await fetchTeamMembers(team.id);
         for (const m of members) {
-          if (m.is_active) {
+          if (m.is_active && !seen.has(m.email || m.slack_user_id)) {
+            seen.add(m.email || m.slack_user_id);
             results.push({ member: m, teamName: team.name });
           }
         }
@@ -441,19 +460,56 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               )}
             </div>
 
-            {/* Reassign dropdown — admin/leader only */}
-            {canReassign && allMembers && (
+            {/* Change Team — admin/leader only */}
+            {canReassign && allTeams && issue.status !== 'resolved' && issue.status !== 'closed' && (
               <div className="relative">
                 <button
-                  onClick={() => { setAssignMenuOpen(!assignMenuOpen); setStatusMenuOpen(false); setAssignSearch(''); }}
+                  onClick={() => { setTeamMenuOpen(!teamMenuOpen); setStatusMenuOpen(false); setAssignMenuOpen(false); }}
+                  disabled={teamChangeMutation.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {teamChangeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  {teamChangeMutation.isPending ? 'Moving...' : 'Change Team'}
+                </button>
+                {teamMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                    {allTeams
+                      .filter(t => t.id !== issue.team_id)
+                      .map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => teamChangeMutation.mutate(t.id)}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg"
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reassign dropdown — admin/leader only */}
+            {canReassign && allMembers && issue.status !== 'resolved' && issue.status !== 'closed' && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setAssignMenuOpen(!assignMenuOpen);
+                    setStatusMenuOpen(false);
+                    setAssignSearch('');
+                    // Pre-select current assignees
+                    const current = new Set((issue.assignees || []).map((a: { id: string }) => a.id));
+                    if (issue.assigned_to && !current.has(issue.assigned_to)) current.add(issue.assigned_to);
+                    setSelectedAssignees(current);
+                  }}
                   disabled={assignMutation.isPending}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
                 >
                   {assignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  {assignMutation.isPending ? 'Assigning...' : 'Reassign'}
+                  {assignMutation.isPending ? 'Assigning...' : 'Assign'}
                 </button>
                 {assignMenuOpen && (
-                  <div className="absolute right-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <div className="absolute right-0 mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
                     <div className="p-2 border-b border-slate-100">
                       <input
                         type="text"
@@ -467,32 +523,66 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                     <div className="max-h-64 overflow-y-auto">
                       {allMembers
                         .filter((entry) => {
-                          if (entry.member.id === issue.assigned_to) return false;
                           if (!assignSearch) return true;
                           const q = assignSearch.toLowerCase();
                           return entry.member.name.toLowerCase().includes(q)
                             || (entry.member.email || '').toLowerCase().includes(q)
                             || entry.teamName.toLowerCase().includes(q);
                         })
-                        .map((entry) => (
-                          <button
-                            key={entry.member.id}
-                            onClick={() => assignMutation.mutate(entry.member.id)}
-                            className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-b-0"
-                          >
-                            <div className="font-medium text-slate-700">{entry.member.name}</div>
-                            <div className="text-xs text-slate-400">{entry.teamName} &middot; {entry.member.open_issue_count} open issues</div>
-                          </button>
-                        ))}
+                        .map((entry) => {
+                          const checked = selectedAssignees.has(entry.member.id);
+                          return (
+                            <label
+                              key={entry.member.id}
+                              className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-b-0"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  const next = new Set(selectedAssignees);
+                                  if (checked) next.delete(entry.member.id);
+                                  else next.add(entry.member.id);
+                                  setSelectedAssignees(next);
+                                }}
+                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-slate-700">{entry.member.name}</div>
+                                <div className="text-xs text-slate-400">{entry.teamName} · {entry.member.open_issue_count} open</div>
+                              </div>
+                            </label>
+                          );
+                        })}
                     </div>
-                    {issue.assigned_to && (
-                      <button
-                        onClick={() => assignMutation.mutate(null)}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 border-t border-slate-200 rounded-b-lg"
-                      >
-                        Unassign
-                      </button>
-                    )}
+                    <div className="p-2 border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-xs text-slate-500">{selectedAssignees.size} selected</span>
+                      <div className="flex gap-2">
+                        {(issue.assigned_to || issue.assignees?.length > 0) && (
+                          <button
+                            onClick={() => {
+                              setSelectedAssignees(new Set());
+                              assignMutation.mutate([]);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md"
+                          >
+                            Unassign all
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const selected = allMembers
+                              .filter(e => selectedAssignees.has(e.member.id))
+                              .map(e => ({ id: e.member.id, name: e.member.name, slack_user_id: e.member.slack_user_id }));
+                            assignMutation.mutate(selected);
+                          }}
+                          disabled={assignMutation.isPending}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -523,7 +613,11 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         <InfoItem
           icon={<User className="w-4 h-4 text-slate-400" />}
           label="Assigned To"
-          value={issue.assignee_name || 'Unassigned'}
+          value={
+            issue.assignees?.length > 0
+              ? issue.assignees.map((a: { name: string }) => a.name).join(', ')
+              : (issue.assignee_name || 'Unassigned')
+          }
         />
         <InfoItem
           icon={<User className="w-4 h-4 text-slate-400" />}

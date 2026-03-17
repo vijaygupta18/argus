@@ -95,13 +95,13 @@ async def check_and_send_reminders():
 
                 # Build and send reminder with Block Kit
                 assignee = issue.assignee
-                fallback, blocks = format_reminder_blocks(issue, assignee, settings.app_base_url)
+                fallback, attachments = format_reminder_blocks(issue, assignee, settings.app_base_url)
 
                 sent = await slack_service.post_thread_message(
                     channel=issue.slack_channel_id,
                     thread_ts=issue.slack_thread_ts,
-                    text=fallback,
-                    blocks=blocks,
+                    text="",
+                    attachments=attachments,
                 )
 
                 if sent:

@@ -38,6 +38,9 @@ class Issue(Base):
         ForeignKey("team_members.id"),
         nullable=True,
     )
+    assignees: Mapped[list] = mapped_column(
+        JSONB, server_default="[]", nullable=False
+    )  # [{id, name, slack_user_id}]
     reported_by_slack_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )

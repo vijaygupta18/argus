@@ -34,6 +34,7 @@ export interface Issue {
   category: string | null;
   team_id: string | null;
   assigned_to: string | null;
+  assignees: { id: string; name: string; slack_user_id?: string }[];
   assignee_name: string | null;
   team_name: string | null;
   reported_by_slack_id: string;

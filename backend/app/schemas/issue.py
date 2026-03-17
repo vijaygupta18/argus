@@ -17,6 +17,12 @@ class IssueCreate(BaseModel):
     team_id: uuid.UUID | None = None
 
 
+class AssigneeInfo(BaseModel):
+    id: str
+    name: str
+    slack_user_id: str | None = None
+
+
 class IssueUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
@@ -25,8 +31,9 @@ class IssueUpdate(BaseModel):
     category: str | None = None
     team_id: uuid.UUID | None = None
     assigned_to: uuid.UUID | None = None
+    assignees: list[AssigneeInfo] | None = None
     notifications_muted: bool | None = None
-    reason: str | None = None  # Required when status changes to "closed"
+    reason: str | None = None
 
 
 class IssueResponse(BaseModel):
@@ -38,6 +45,7 @@ class IssueResponse(BaseModel):
     category: str | None = None
     team_id: uuid.UUID | None = None
     assigned_to: uuid.UUID | None = None
+    assignees: list[dict] = []
     reported_by_slack_id: str | None = None
     reported_by_name: str | None = None
     reported_by_email: str | None = None
