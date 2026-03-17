@@ -21,131 +21,111 @@ PRIORITY_EMOJI = {
     "low": ":large_green_circle:",
 }
 
+PRIORITY_COLOR = {
+    "critical": "#DC2626",
+    "high": "#EA580C",
+    "medium": "#F59E0B",
+    "low": "#10B981",
+}
+
+STATUS_COLOR = {
+    "open": "#3B82F6",
+    "in_progress": "#F59E0B",
+    "resolved": "#10B981",
+    "closed": "#6B7280",
+}
+
+
+def _mention(member: Any) -> str:
+    """Convert a team member to a Slack @mention. Always use <@ID> for real Slack users."""
+    if member and getattr(member, "slack_user_id", None):
+        return f"<@{member.slack_user_id}>"
+    if member and getattr(member, "name", None):
+        return member.name
+    return "_Unassigned_"
+
+
+def _mention_name(name: str | None, slack_user_id: str | None) -> str:
+    """Create a Slack mention from name + slack_user_id."""
+    if slack_user_id:
+        return f"<@{slack_user_id}>"
+    return name or "Unknown"
+
 
 def format_issue_created_blocks(issue: Any, assignee: Any, app_base_url: str) -> tuple[str, list[dict]]:
-    """Format Block Kit message for a new issue."""
     priority = issue.priority or "medium"
     p_emoji = PRIORITY_EMOJI.get(priority, ":grey_question:")
-    # Use name if slack_user_id looks like a dummy (starts with U_)
-    if assignee and assignee.slack_user_id and not assignee.slack_user_id.startswith("U_"):
-        assignee_text = f"<@{assignee.slack_user_id}>"
-    elif assignee:
-        assignee_text = f"*{assignee.name}*"
-    else:
-        assignee_text = "_Unassigned_"
+    assignee_text = _mention(assignee)
     team_name = issue.team.name if issue.team else "Unknown"
     category = issue.category or "Uncategorized"
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
-
-    # Use attachments with colored sidebar — renders cleanly without "See more"
     color = PRIORITY_COLOR.get(priority, "#6B7280")
 
-    attachments = [
-        {
-            "color": color,
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f":rotating_light: *New Issue Tracked*",
-                    },
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f">{issue.title}",
-                    },
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {"type": "mrkdwn", "text": f"*Priority:* {p_emoji} {priority.title()}"},
-                        {"type": "mrkdwn", "text": f"*Team:* {team_name}"},
-                        {"type": "mrkdwn", "text": f"*Assigned:* {assignee_text}"},
-                        {"type": "mrkdwn", "text": f"*Category:* {category}"},
-                    ],
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"},
-                    ],
-                },
-            ],
-        }
-    ]
+    attachments = [{
+        "color": color,
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": ":rotating_light: *New Issue Tracked*"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+            {"type": "section", "fields": [
+                {"type": "mrkdwn", "text": f"*Priority:* {p_emoji} {priority.title()}"},
+                {"type": "mrkdwn", "text": f"*Team:* {team_name}"},
+                {"type": "mrkdwn", "text": f"*Assigned:* {assignee_text}"},
+                {"type": "mrkdwn", "text": f"*Category:* {category}"},
+            ]},
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+        ],
+    }]
 
-    fallback = f"New Issue: {issue.title} | Priority: {priority} | Assigned: {assignee.name if assignee else 'Unassigned'}"
+    fallback = f"New Issue: {issue.title}"
     return fallback, attachments
 
 
 def format_assignment_blocks(issue: Any, old_assignee_name: str | None, new_assignee: Any, assigned_by: str, app_base_url: str) -> tuple[str, list[dict]]:
-    """Format Block Kit message for an assignment change."""
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
-    if new_assignee and new_assignee.slack_user_id and not new_assignee.slack_user_id.startswith("U_"):
-        new_name = f"<@{new_assignee.slack_user_id}>"
-    elif new_assignee:
-        new_name = f"*{new_assignee.name}*"
-    else:
-        new_name = "_Unassigned_"
+    new_name = _mention(new_assignee)
     old_name = old_assignee_name or "Unassigned"
 
-    lines = [
-        f":bust_in_silhouette: *Reassigned*",
-        f"",
-        f"> *{issue.title}*",
-        f"",
-        f"~{old_name}~  :arrow_right:  *{new_name}*",
-        f":pencil2: by *{assigned_by}*",
-        f":link: <{dashboard_url}|View in Dashboard>",
-    ]
+    attachments = [{
+        "color": "#3B82F6",
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": ":bust_in_silhouette: *Reassigned*"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+            {"type": "section", "fields": [
+                {"type": "mrkdwn", "text": f"*From:* ~{old_name}~"},
+                {"type": "mrkdwn", "text": f"*To:* {new_name}"},
+                {"type": "mrkdwn", "text": f"*By:* {assigned_by}"},
+            ]},
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+        ],
+    }]
 
-    blocks = [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-        },
-    ]
-
-    new_display = new_assignee.name if new_assignee else "Unassigned"
-    fallback = f"Reassigned: {old_name} → {new_display} by {assigned_by} | {issue.title}"
-    return fallback, blocks
+    fallback = f"Reassigned: {issue.title}"
+    return fallback, attachments
 
 
-def format_status_change_blocks(issue: Any, old_status: str, new_status: str, app_base_url: str) -> tuple[str, list[dict]]:
-    """Format Block Kit message for a status change."""
+def format_status_change_blocks(issue: Any, old_status: str, new_status: str, app_base_url: str, changed_by: str | None = None) -> tuple[str, list[dict]]:
     old_label = STATUS_LABELS.get(old_status, old_status)
     new_label = STATUS_LABELS.get(new_status, new_status)
-    old_emoji = STATUS_EMOJI.get(old_status, "grey_question")
     new_emoji = STATUS_EMOJI.get(new_status, "grey_question")
+    color = STATUS_COLOR.get(new_status, "#6B7280")
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
+    by_text = f"  ·  by {changed_by}" if changed_by else ""
 
-    lines = [
-        f":{new_emoji}: *Status Updated*",
-        f"",
-        f":{old_emoji}: ~{old_label}~  :arrow_right:  :{new_emoji}: *{new_label}*",
-        f"",
-        f"> *{issue.title}*",
-        f":link: <{dashboard_url}|View in Dashboard>",
-    ]
-
-    blocks = [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-        },
-    ]
+    attachments = [{
+        "color": color,
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f":{new_emoji}: *Status Updated*  ·  ~{old_label}~ → *{new_label}*{by_text}"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+        ],
+    }]
 
     fallback = f"Status: {old_label} → {new_label} | {issue.title}"
-    return fallback, blocks
+    return fallback, attachments
 
 
 def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: str) -> tuple[str, list[dict]]:
-    """Format Block Kit message for issue resolution."""
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
-    resolver_text = f" by *{resolved_by}*" if resolved_by else ""
 
     duration_text = ""
     if issue.resolved_at:
@@ -171,78 +151,42 @@ def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: 
         except Exception:
             pass
 
-    lines = [
-        f":white_check_mark: *Issue Resolved*{resolver_text}",
-        f"",
-        f"> *{issue.title}*",
-    ]
-    if duration_text:
-        lines.append(f":stopwatch: *Time to resolution:* {duration_text}")
-    lines.append(f":link: <{dashboard_url}|View in Dashboard>")
+    attachments = [{
+        "color": "#10B981",
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": ":white_check_mark: *Issue Resolved*"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+            {"type": "section", "fields": [
+                {"type": "mrkdwn", "text": f"*Resolved by:* {resolved_by or 'Unknown'}"},
+                {"type": "mrkdwn", "text": f"*Time to resolution:* {duration_text or 'N/A'}"},
+            ]},
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+        ],
+    }]
 
-    blocks = [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-        },
-    ]
-
-    fallback = f"Issue Resolved: {issue.title}{resolver_text}"
-    return fallback, blocks
+    fallback = f"Issue Resolved: {issue.title}"
+    return fallback, attachments
 
 
 def format_reminder_blocks(issue: Any, assignee: Any, app_base_url: str) -> tuple[str, list[dict]]:
-    """Format Block Kit reminder message."""
-    if assignee and assignee.slack_user_id and not assignee.slack_user_id.startswith("U_"):
-        assignee_mention = f"<@{assignee.slack_user_id}>"
-    elif assignee:
-        assignee_mention = f"*{assignee.name}*"
-    else:
-        assignee_mention = "Team"
+    assignee_mention = _mention(assignee)
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
     status_label = STATUS_LABELS.get(issue.status, issue.status)
     p_emoji = PRIORITY_EMOJI.get(issue.priority or "medium", ":grey_question:")
 
-    lines = [
-        f":bell: *Reminder — Issue Still {status_label}*",
-        f"",
-        f"> *{issue.title}*",
-        f"",
-        f"{p_emoji} *Priority:* {(issue.priority or 'medium').title()}",
-        f":bust_in_silhouette: *Assigned:* {assignee_mention}",
-        f"",
-        f"{assignee_mention} — please provide an update on this issue.",
-        f":link: <{dashboard_url}|View in Dashboard>",
-    ]
+    attachments = [{
+        "color": "#F59E0B",
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f":bell: *Reminder — Issue Still {status_label}*"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+            {"type": "section", "fields": [
+                {"type": "mrkdwn", "text": f"*Priority:* {p_emoji} {(issue.priority or 'medium').title()}"},
+                {"type": "mrkdwn", "text": f"*Assigned:* {assignee_mention}"},
+            ]},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"{assignee_mention} — please provide an update."}},
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+        ],
+    }]
 
-    blocks = [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-        },
-    ]
-
-    fallback = f"Reminder: {issue.title} is still {status_label}. Assigned to {assignee.name if assignee else 'team'}."
-    return fallback, blocks
-
-
-# Legacy text-only formatters
-
-def format_issue_created(issue: Any, assignee: Any, app_base_url: str) -> str:
-    fallback, _ = format_issue_created_blocks(issue, assignee, app_base_url)
-    return fallback
-
-
-def format_status_change(issue: Any, old_status: str, new_status: str, app_base_url: str) -> str:
-    fallback, _ = format_status_change_blocks(issue, old_status, new_status, app_base_url)
-    return fallback
-
-
-def format_reminder(issue: Any, assignee: Any, app_base_url: str) -> str:
-    fallback, _ = format_reminder_blocks(issue, assignee, app_base_url)
-    return fallback
-
-
-def format_resolution(issue: Any, resolved_by: str | None = None) -> str:
-    resolved_text = f" by *{resolved_by}*" if resolved_by else ""
-    return f":white_check_mark: *Issue Resolved*{resolved_text}\n*{issue.title}*"
+    fallback = f"Reminder: {issue.title}"
+    return fallback, attachments

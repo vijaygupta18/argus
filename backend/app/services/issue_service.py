@@ -185,13 +185,15 @@ async def get_issue_with_details(db: AsyncSession, issue_id: uuid.UUID) -> Issue
 async def list_issues(
     db: AsyncSession,
     status: str | None = None,
+    priority: str | None = None,
     team_id: uuid.UUID | None = None,
     assigned_to: uuid.UUID | None = None,
+    search: str | None = None,
     page: int = 1,
     per_page: int = 20,
 ) -> tuple[list[Issue], int]:
     """
-    List issues with filters and pagination.
+    List issues with filters, search, and pagination.
     Returns (issues, total_count).
     """
     base_stmt = select(Issue)
@@ -201,6 +203,10 @@ async def list_issues(
         base_stmt = base_stmt.where(Issue.status == status)
         count_stmt = count_stmt.where(Issue.status == status)
 
+    if priority:
+        base_stmt = base_stmt.where(Issue.priority == priority)
+        count_stmt = count_stmt.where(Issue.priority == priority)
+
     if team_id:
         base_stmt = base_stmt.where(Issue.team_id == team_id)
         count_stmt = count_stmt.where(Issue.team_id == team_id)
@@ -208,6 +214,18 @@ async def list_issues(
     if assigned_to:
         base_stmt = base_stmt.where(Issue.assigned_to == assigned_to)
         count_stmt = count_stmt.where(Issue.assigned_to == assigned_to)
+
+    if search:
+        search_filter = f"%{search}%"
+        from sqlalchemy import or_
+        search_cond = or_(
+            Issue.title.ilike(search_filter),
+            Issue.description.ilike(search_filter),
+            Issue.category.ilike(search_filter),
+            Issue.reported_by_name.ilike(search_filter),
+        )
+        base_stmt = base_stmt.where(search_cond)
+        count_stmt = count_stmt.where(search_cond)
 
     # Get total count
     count_result = await db.execute(count_stmt)

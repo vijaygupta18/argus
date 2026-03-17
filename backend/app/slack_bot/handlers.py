@@ -37,6 +37,14 @@ def register_handlers(app):
             )
             return
 
+        # If mentioned inside an existing thread, ask to create a new thread
+        if event.get("thread_ts") and event["thread_ts"] != event["ts"]:
+            await say(
+                text=":warning: Please report new issues in a *new message*, not inside an existing thread. One thread = one issue.",
+                thread_ts=event["thread_ts"],
+            )
+            return
+
         # 1. Acknowledge with reaction
         try:
             await slack_service.add_reaction(channel, message_ts, "eyes")
@@ -113,23 +121,32 @@ def register_handlers(app):
                     issue, assignee, settings.app_base_url
                 )
 
-                await say(text=fallback, attachments=attachments, thread_ts=thread_ts)
+                await say(text="", attachments=attachments, thread_ts=thread_ts)
 
                 # 7. DM the assigned person
                 if assignee and assignee.slack_user_id:
                     try:
+                        from app.slack_bot.messages import PRIORITY_COLOR, PRIORITY_EMOJI
                         dashboard_url = f"{settings.app_base_url}/issues/{issue.id}"
-                        dm_text = (
-                            f":bust_in_silhouette: *You've been assigned a new issue*\n"
-                            f"*Title:* {issue.title}\n"
-                            f"*Priority:* {issue.priority or 'medium'}\n"
-                            f"*Team:* {matched_team.name}\n"
-                            f"*Reported by:* {reporter_name}\n"
-                            f"*Dashboard:* <{dashboard_url}|View Issue>"
-                        )
+                        p = issue.priority or "medium"
+                        dm_attachments = [{
+                            "color": PRIORITY_COLOR.get(p, "#6B7280"),
+                            "blocks": [
+                                {"type": "section", "text": {"type": "mrkdwn", "text": ":bust_in_silhouette: *You've been assigned a new issue*"}},
+                                {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+                                {"type": "section", "fields": [
+                                    {"type": "mrkdwn", "text": f"*Priority:* {PRIORITY_EMOJI.get(p, '')} {p.title()}"},
+                                    {"type": "mrkdwn", "text": f"*Team:* {matched_team.name}"},
+                                    {"type": "mrkdwn", "text": f"*Channel:* #{channel_name}"},
+                                    {"type": "mrkdwn", "text": f"*Reported by:* {reporter_name}"},
+                                ]},
+                                {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+                            ],
+                        }]
                         await slack_service.post_dm(
                             user_id=assignee.slack_user_id,
-                            text=dm_text,
+                            text="",
+                            attachments=dm_attachments,
                         )
                     except Exception as e:
                         logger.warning(f"Failed to DM assignee: {e}")

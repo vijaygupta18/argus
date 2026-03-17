@@ -70,18 +70,19 @@ class SlackService:
         user_id: str,
         text: str,
         blocks: list[dict] | None = None,
+        attachments: list[dict] | None = None,
     ) -> dict | None:
         """Send a DM to a user by opening a conversation and posting."""
         self._check_client()
         try:
-            # Open a DM channel with the user
             conv = await self.client.conversations_open(users=[user_id])
             channel_id = conv.data["channel"]["id"]
-            response = await self.client.chat_postMessage(
-                channel=channel_id,
-                text=text,
-                blocks=blocks,
-            )
+            kwargs: dict = {"channel": channel_id, "text": text}
+            if blocks:
+                kwargs["blocks"] = blocks
+            if attachments:
+                kwargs["attachments"] = attachments
+            response = await self.client.chat_postMessage(**kwargs)
             return response.data
         except SlackApiError as e:
             logger.error(f"Failed to DM user {user_id}: {e.response['error']}")

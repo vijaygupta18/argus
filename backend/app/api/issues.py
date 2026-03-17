@@ -83,19 +83,23 @@ async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncS
 @router.get("", response_model=IssueListResponse)
 async def list_issues(
     status: str | None = Query(None, description="Filter by status"),
+    priority: str | None = Query(None, description="Filter by priority"),
     team_id: uuid.UUID | None = Query(None, description="Filter by team ID"),
     assigned_to: uuid.UUID | None = Query(None, description="Filter by assignee ID"),
+    search: str | None = Query(None, description="Search title, description, category, reporter"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    """List issues with optional filters and pagination."""
+    """List issues with optional filters, search, and pagination."""
     issues, total = await issue_service.list_issues(
         db,
         status=status,
+        priority=priority,
         team_id=team_id,
         assigned_to=assigned_to,
+        search=search,
         page=page,
         per_page=per_page,
     )
@@ -188,6 +192,8 @@ async def update_issue(
     if old_issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
     old_status = old_issue.status
+    old_assigned_to_id = str(old_issue.assigned_to) if old_issue.assigned_to else ""
+    old_assignee_name = old_issue.assignee.name if old_issue.assignee else None
 
     update_data = data.model_dump(exclude_unset=True)
 
@@ -258,24 +264,22 @@ async def update_issue(
     updated = await issue_service.get_issue_with_details(db, issue.id)
 
     # Notify Slack on assignment change + DM the new assignee
-    old_assigned_id = str(old_issue.assigned_to) if old_issue.assigned_to else ""
     new_assigned_id = str(updated.assigned_to) if updated.assigned_to else ""
-    assignment_changed = old_assigned_id != new_assigned_id
+    assignment_changed = old_assigned_to_id != new_assigned_id
+    logger.info(f"Assignment check: old={old_assigned_to_id} new={new_assigned_id} changed={assignment_changed}")
 
     if assignment_changed and updated.slack_channel_id and updated.slack_thread_ts:
         try:
             from app.slack_bot.messages import format_assignment_blocks
-            old_assignee_name = old_issue.assignee.name if old_issue.assignee else None
             new_assignee = updated.assignee
-            fallback, blocks = format_assignment_blocks(
+            fallback, attachments = format_assignment_blocks(
                 updated, old_assignee_name, new_assignee, user.name, settings.app_base_url
             )
-            # Post in thread
             await slack_service.post_thread_message(
                 channel=updated.slack_channel_id,
                 thread_ts=updated.slack_thread_ts,
-                text=fallback,
-                blocks=blocks,
+                text="",
+                attachments=attachments,
             )
             logger.info(f"Slack assignment notification sent for issue {issue_id}")
         except Exception as e:
@@ -284,18 +288,29 @@ async def update_issue(
     # DM the new assignee
     if assignment_changed and updated.assignee and updated.assignee.slack_user_id:
         try:
+            from app.slack_bot.messages import PRIORITY_COLOR, PRIORITY_EMOJI
             dashboard_url = f"{settings.app_base_url}/issues/{issue_id}"
-            dm_text = (
-                f":bust_in_silhouette: *You've been assigned an issue*\n"
-                f"*Title:* {updated.title}\n"
-                f"*Priority:* {updated.priority or 'medium'}\n"
-                f"*Team:* {updated.team.name if updated.team else 'Unknown'}\n"
-                f"*Assigned by:* {user.name}\n"
-                f"*Dashboard:* <{dashboard_url}|View Issue>"
-            )
+            channel_display = f"#{updated.slack_channel_name}" if updated.slack_channel_name else (updated.slack_channel_id or "N/A")
+            p = updated.priority or "medium"
+            team_name = updated.team.name if updated.team else "Unknown"
+            dm_attachments = [{
+                "color": PRIORITY_COLOR.get(p, "#6B7280"),
+                "blocks": [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": ":bust_in_silhouette: *You've been assigned an issue*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": f">{updated.title}"}},
+                    {"type": "section", "fields": [
+                        {"type": "mrkdwn", "text": f"*Priority:* {PRIORITY_EMOJI.get(p, '')} {p.title()}"},
+                        {"type": "mrkdwn", "text": f"*Team:* {team_name}"},
+                        {"type": "mrkdwn", "text": f"*Channel:* {channel_display}"},
+                        {"type": "mrkdwn", "text": f"*Assigned by:* {user.name}"},
+                    ]},
+                    {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+                ],
+            }]
             await slack_service.post_dm(
                 user_id=updated.assignee.slack_user_id,
-                text=dm_text,
+                text="",
+                attachments=dm_attachments,
             )
         except Exception as e:
             logger.error(f"Failed to DM assignee for issue {issue_id}: {e}")
@@ -316,12 +331,12 @@ async def update_issue(
                 await slack_service.add_reaction(updated.slack_channel_id, msg_ts, new_emoji)
 
             # Post rich status change message in thread
-            fallback, blocks = format_status_change_blocks(updated, old_status, data.status, settings.app_base_url)
+            fallback, attachments = format_status_change_blocks(updated, old_status, data.status, settings.app_base_url)
             await slack_service.post_thread_message(
                 channel=updated.slack_channel_id,
                 thread_ts=updated.slack_thread_ts,
-                text=fallback,
-                blocks=blocks,
+                text="",
+                attachments=attachments,
             )
         except Exception as e:
             logger.error(f"Failed to notify Slack on status change for {issue_id}: {e}")
@@ -395,12 +410,12 @@ async def resolve_issue(
                 resolved_by_display = user.name
 
             # Post rich resolution message
-            fallback, blocks = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url)
+            fallback, attachments = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url)
             await slack_service.post_thread_message(
                 channel=issue.slack_channel_id,
                 thread_ts=issue.slack_thread_ts,
-                text=fallback,
-                blocks=blocks,
+                text="",
+                attachments=attachments,
             )
         except Exception as e:
             logger.error(f"Failed to post Slack resolution for issue {issue_id}: {e}")
