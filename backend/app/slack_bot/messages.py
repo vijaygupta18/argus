@@ -80,9 +80,25 @@ def format_issue_created_blocks(issue: Any, assignee: Any, app_base_url: str) ->
     return fallback, attachments
 
 
+def _assignees_text(issue: Any) -> str:
+    """Build a mention list from issue.assignees JSONB or primary assignee."""
+    assignees = getattr(issue, "assignees", None) or []
+    if assignees:
+        names = []
+        for a in assignees:
+            sid = a.get("slack_user_id") if isinstance(a, dict) else None
+            name = a.get("name", "?") if isinstance(a, dict) else "?"
+            names.append(f"<@{sid}>" if sid else name)
+        return ", ".join(names)
+    assignee = getattr(issue, "assignee", None)
+    if assignee:
+        return _mention(assignee)
+    return "_Unassigned_"
+
+
 def format_assignment_blocks(issue: Any, old_assignee_name: str | None, new_assignee: Any, assigned_by: str, app_base_url: str) -> tuple[str, list[dict]]:
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
-    new_name = _mention(new_assignee)
+    new_names = _assignees_text(issue)
     old_name = old_assignee_name or "Unassigned"
 
     attachments = [{
@@ -92,7 +108,7 @@ def format_assignment_blocks(issue: Any, old_assignee_name: str | None, new_assi
             {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
             {"type": "section", "fields": [
                 {"type": "mrkdwn", "text": f"*From:* ~{old_name}~"},
-                {"type": "mrkdwn", "text": f"*To:* {new_name}"},
+                {"type": "mrkdwn", "text": f"*To:* {new_names}"},
                 {"type": "mrkdwn", "text": f"*By:* {assigned_by}"},
             ]},
             {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},

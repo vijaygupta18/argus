@@ -36,6 +36,61 @@ import type {
 } from '../api/types';
 import { useAuth } from '../contexts/AuthContext';
 
+function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-slate-600">{message}</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isPending}
+              className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddTeamModal({
   open,
   onClose,
@@ -177,91 +232,125 @@ function AddTeamModal({
 
 function AddMemberForm({
   teamId,
+  existingEmails,
   onClose,
 }: {
   teamId: string;
+  existingEmails: Set<string>;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateMemberPayload>({
-    name: '',
-    slack_user_id: '',
-    email: '',
-  });
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
 
   const mutation = useMutation({
     mutationFn: (payload: CreateMemberPayload) => createMember(teamId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-members', teamId] });
       queryClient.invalidateQueries({ queryKey: ['teams'] });
-      setForm({ name: '', slack_user_id: '', email: '' });
+      setSearch('');
+      setError('');
       onClose();
     },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      setError(err.response?.data?.detail || 'Failed to add member');
+    },
   });
+
+  // Fetch all members from all teams to build a searchable directory
+  const { data: allTeams } = useQuery({
+    queryKey: ['teams'],
+    queryFn: fetchTeams,
+  });
+
+  const { data: directory } = useQuery({
+    queryKey: ['member-directory', allTeams?.map(t => t.id).join(',')],
+    queryFn: async () => {
+      if (!allTeams) return [];
+      const seen = new Set<string>();
+      const results: { name: string; email: string; slack_user_id: string }[] = [];
+      for (const team of allTeams) {
+        const members = await fetchTeamMembers(team.id);
+        for (const m of members) {
+          const key = m.email || m.slack_user_id;
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push({ name: m.name, email: m.email || '', slack_user_id: m.slack_user_id });
+          }
+        }
+      }
+      return results;
+    },
+    enabled: !!allTeams && allTeams.length > 0,
+  });
+
+  const filtered = (directory || []).filter(p => {
+    // Don't show people already in this team
+    if (p.email && existingEmails.has(p.email)) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q);
+  });
+
+  const handleAddByEmail = () => {
+    const email = search.trim();
+    if (!email || !email.includes('@')) return;
+    mutation.mutate({ email });
+  };
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4 mt-3">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-medium text-slate-700">Add New Member</h4>
+        <h4 className="text-sm font-medium text-slate-700">Add Member</h4>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          mutation.mutate(form);
-        }}
-        className="space-y-3"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Name *</label>
-            <input
-              type="text"
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="John Doe"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Slack User ID *</label>
-            <input
-              type="text"
-              required
-              value={form.slack_user_id}
-              onChange={(e) => setForm({ ...form, slack_user_id: e.target.value })}
-              placeholder="U0123456789"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email || ''}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="john@example.com"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            disabled={mutation.isPending || !form.name.trim() || !form.slack_user_id.trim()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-            {mutation.isPending ? 'Adding...' : 'Add Member'}
-          </button>
-          {mutation.isError && (
-            <span className="text-xs text-red-500">Failed to add member</span>
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setError(''); }}
+          placeholder="Search by name or type email..."
+          autoFocus
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+        />
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-100">
+          {filtered.map((p) => (
+            <button
+              key={p.email || p.slack_user_id}
+              onClick={() => mutation.mutate({ email: p.email || undefined, name: p.name, slack_user_id: p.slack_user_id || undefined })}
+              disabled={mutation.isPending}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-b-0 disabled:opacity-50"
+            >
+              <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600 shrink-0">
+                {p.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-700 truncate">{p.name}</div>
+                {p.email && <div className="text-xs text-slate-400 truncate">{p.email}</div>}
+              </div>
+              {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" /> : <Plus className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+          ))}
+          {filtered.length === 0 && search.trim() && (
+            <div className="px-3 py-4 text-center">
+              <p className="text-xs text-slate-400 mb-2">No existing members found</p>
+              {search.includes('@') && (
+                <button
+                  onClick={handleAddByEmail}
+                  disabled={mutation.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {mutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                  Add {search.trim()} to team
+                </button>
+              )}
+            </div>
           )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -286,6 +375,8 @@ function TeamCard({ team }: { team: Team }) {
   const [expanded, setExpanded] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showDeleteTeamConfirm, setShowDeleteTeamConfirm] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
   const [editForm, setEditForm] = useState<UpdateTeamPayload>({
     name: team.name,
     description: team.description,
@@ -322,6 +413,7 @@ function TeamCard({ team }: { team: Team }) {
     mutationFn: () => deleteTeam(team.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setShowDeleteTeamConfirm(false);
     },
   });
 
@@ -338,6 +430,7 @@ function TeamCard({ team }: { team: Team }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-members', team.id] });
       queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setMemberToRemove(null);
     },
   });
 
@@ -483,11 +576,7 @@ function TeamCard({ team }: { team: Team }) {
               )}
               {isAdmin && (
                 <button
-                  onClick={() => {
-                    if (window.confirm(`Delete team "${team.name}"?`)) {
-                      deleteTeamMutation.mutate();
-                    }
-                  }}
+                  onClick={() => setShowDeleteTeamConfirm(true)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   title="Delete team"
                 >
@@ -583,11 +672,7 @@ function TeamCard({ team }: { team: Team }) {
                         {member.is_active ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Remove "${member.name}" from this team?`)) {
-                            removeMember.mutate(member.id);
-                          }
-                        }}
+                        onClick={() => setMemberToRemove(member)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -611,7 +696,7 @@ function TeamCard({ team }: { team: Team }) {
               {canManage && (
                 <>
                   {showAddMember ? (
-                    <AddMemberForm teamId={team.id} onClose={() => setShowAddMember(false)} />
+                    <AddMemberForm teamId={team.id} existingEmails={new Set(members?.map(m => m.email).filter(Boolean) as string[] || [])} onClose={() => setShowAddMember(false)} />
                   ) : (
                     <button
                       onClick={() => setShowAddMember(true)}
@@ -627,6 +712,30 @@ function TeamCard({ team }: { team: Team }) {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteTeamConfirm}
+        title="Delete Team"
+        message={`Are you sure you want to delete ${team.name}? This will remove all team members and unassign any issues.`}
+        confirmLabel="Delete Team"
+        onConfirm={() => deleteTeamMutation.mutate()}
+        onCancel={() => setShowDeleteTeamConfirm(false)}
+        isPending={deleteTeamMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={!!memberToRemove}
+        title="Remove Member"
+        message={memberToRemove ? `Remove ${memberToRemove.name} from ${team.name}?` : ''}
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (memberToRemove) {
+            removeMember.mutate(memberToRemove.id);
+          }
+        }}
+        onCancel={() => setMemberToRemove(null)}
+        isPending={removeMember.isPending}
+      />
     </div>
   );
 }

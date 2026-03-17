@@ -135,8 +135,8 @@ export interface UpdateTeamPayload {
 }
 
 export interface CreateMemberPayload {
-  name: string;
-  slack_user_id: string;
+  name?: string;
+  slack_user_id?: string;
   email?: string;
   is_active?: boolean;
 }

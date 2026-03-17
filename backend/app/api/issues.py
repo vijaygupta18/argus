@@ -194,7 +194,14 @@ async def update_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
     old_status = old_issue.status
     old_assigned_to_id = str(old_issue.assigned_to) if old_issue.assigned_to else ""
-    old_assignee_name = old_issue.assignee.name if old_issue.assignee else None
+    # Build old assignee display from assignees array or primary assignee
+    old_assignees_list = old_issue.assignees or []
+    if old_assignees_list:
+        old_assignee_name = ", ".join(a.get("name", "?") for a in old_assignees_list if isinstance(a, dict))
+    elif old_issue.assignee:
+        old_assignee_name = old_issue.assignee.name
+    else:
+        old_assignee_name = None
 
     update_data = data.model_dump(exclude_unset=True)
 
