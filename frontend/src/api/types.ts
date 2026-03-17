@@ -103,6 +103,7 @@ export interface IssueFilters {
   assigned_to?: string;
   priority?: IssuePriority;
   search?: string;
+  mine?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -125,6 +126,7 @@ export interface UpdateIssuePayload {
   priority?: IssuePriority;
   team_id?: string | null;
   assigned_to?: string | null;
+  assignees?: { id: string; name: string; slack_user_id?: string }[];
   notifications_muted?: boolean;
   reason?: string;
 }

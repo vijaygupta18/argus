@@ -77,10 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (issue: Issue) => {
       if (isAdmin) return true;
       if (issue.team_id && user?.roles[issue.team_id] === 'leader') return true;
-      // Check primary assignee
-      if (issue.assignee_name && user?.name && issue.assignee_name === user.name) return true;
-      // Check multi-assignees
-      if (issue.assignees?.some((a: { name: string }) => a.name === user?.name)) return true;
+      // Check multi-assignees by slack_user_id (unique identifier)
+      if (user?.slack_user_id && issue.assignees?.some((a: { slack_user_id?: string }) => a.slack_user_id === user.slack_user_id)) return true;
+      // Check primary assignee: match by name AND slack_user_id for safety
+      if (issue.assignee_name && user?.name && issue.assignee_name === user.name && user.slack_user_id) return true;
       return false;
     },
     [isAdmin, user]

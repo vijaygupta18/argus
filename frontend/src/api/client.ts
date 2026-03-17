@@ -56,6 +56,7 @@ export async function fetchIssues(filters: IssueFilters = {}): Promise<Paginated
   if (filters.assigned_to) params.assigned_to = filters.assigned_to;
   if (filters.priority) params.priority = filters.priority;
   if (filters.search) params.search = filters.search;
+  if (filters.mine) params.mine = 'true';
   params.page = filters.page || 1;
   params.per_page = filters.per_page || 20;
   const { data } = await api.get<PaginatedResponse<Issue>>('/issues', { params });

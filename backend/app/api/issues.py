@@ -113,6 +113,8 @@ async def list_issues(
     priority: str | None = Query(None, description="Filter by priority"),
     team_id: uuid.UUID | None = Query(None, description="Filter by team ID"),
     assigned_to: uuid.UUID | None = Query(None, description="Filter by assignee ID"),
+    reported_by_email: str | None = Query(None, description="Filter by reporter email"),
+    mine: bool = Query(False, description="Show only issues assigned to current user"),
     search: str | None = Query(None, description="Search title, description, category, reporter"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -120,12 +122,21 @@ async def list_issues(
     user: UserContext = Depends(get_current_user),
 ):
     """List issues with optional filters, search, and pagination."""
+    # If mine=true, find the user's team member IDs and filter by assigned_to
+    if mine and not assigned_to:
+        stmt = select(TeamMember).where(TeamMember.email == user.email)
+        result = await db.execute(stmt)
+        my_members = result.scalars().all()
+        if my_members:
+            assigned_to = my_members[0].id
+
     issues, total = await issue_service.list_issues(
         db,
         status=status,
         priority=priority,
         team_id=team_id,
         assigned_to=assigned_to,
+        reported_by_email=reported_by_email,
         search=search,
         page=page,
         per_page=per_page,
@@ -448,7 +459,7 @@ async def update_issue(
                 }]
                 await slack_service.post_dm(
                     user_id=slack_uid,
-                    text="",
+                    text=f"You've been assigned: {updated.title}",
                     attachments=dm_attachments,
                 )
         except Exception as e:
@@ -495,7 +506,7 @@ async def update_issue(
                     }]
                     await slack_service.post_dm(
                         user_id=leader.slack_user_id,
-                        text="",
+                        text=f"Assignment update: {updated.title}",
                         attachments=leader_dm,
                     )
         except Exception as e:
@@ -607,7 +618,7 @@ async def resolve_issue(
                 resolved_by_display = user.name
 
             # Post rich resolution message
-            fallback, attachments = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url)
+            fallback, attachments = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url, reason=body.reason)
             await slack_service.post_thread_message(
                 channel=issue.slack_channel_id,
                 thread_ts=issue.slack_thread_ts,

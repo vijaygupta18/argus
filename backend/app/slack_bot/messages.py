@@ -140,7 +140,7 @@ def format_status_change_blocks(issue: Any, old_status: str, new_status: str, ap
     return fallback, attachments
 
 
-def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: str) -> tuple[str, list[dict]]:
+def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: str, reason: str | None = None) -> tuple[str, list[dict]]:
     dashboard_url = f"{app_base_url}/issues/{issue.id}"
 
     duration_text = ""
@@ -167,17 +167,23 @@ def format_resolution_blocks(issue: Any, resolved_by: str | None, app_base_url: 
         except Exception:
             pass
 
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": ":white_check_mark: *Issue Resolved*"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*Marked Resolved by:* {resolved_by or 'Unknown'}"},
+            {"type": "mrkdwn", "text": f"*Time to resolution:* {duration_text or 'N/A'}"},
+        ]},
+    ]
+
+    if reason:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Reason:*\n>{reason}"}})
+
+    blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]})
+
     attachments = [{
         "color": "#10B981",
-        "blocks": [
-            {"type": "section", "text": {"type": "mrkdwn", "text": ":white_check_mark: *Issue Resolved*"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
-            {"type": "section", "fields": [
-                {"type": "mrkdwn", "text": f"*Marked Resolved by:* {resolved_by or 'Unknown'}"},
-                {"type": "mrkdwn", "text": f"*Time to resolution:* {duration_text or 'N/A'}"},
-            ]},
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
-        ],
+        "blocks": blocks,
     }]
 
     fallback = f"Issue Resolved: {issue.title}"

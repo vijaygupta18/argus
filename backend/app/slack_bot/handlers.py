@@ -145,7 +145,7 @@ def register_handlers(app):
                         }]
                         await slack_service.post_dm(
                             user_id=assignee.slack_user_id,
-                            text="",
+                            text=f"You've been assigned: {issue.title}",
                             attachments=dm_attachments,
                         )
                     except Exception as e:

@@ -213,6 +213,7 @@ async def list_issues(
     priority: str | None = None,
     team_id: uuid.UUID | None = None,
     assigned_to: uuid.UUID | None = None,
+    reported_by_email: str | None = None,
     search: str | None = None,
     page: int = 1,
     per_page: int = 20,
@@ -239,6 +240,10 @@ async def list_issues(
     if assigned_to:
         base_stmt = base_stmt.where(Issue.assigned_to == assigned_to)
         count_stmt = count_stmt.where(Issue.assigned_to == assigned_to)
+
+    if reported_by_email:
+        base_stmt = base_stmt.where(Issue.reported_by_email == reported_by_email)
+        count_stmt = count_stmt.where(Issue.reported_by_email == reported_by_email)
 
     if search:
         search_filter = f"%{search}%"

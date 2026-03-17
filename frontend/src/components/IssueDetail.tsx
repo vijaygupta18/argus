@@ -27,6 +27,7 @@ import {
   Search as SearchIcon,
   Wrench,
   Layers,
+  ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -517,17 +518,23 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
           <div className="pb-4 flex-1 min-w-0 pt-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-slate-800">{entry.action}</span>
-              {entry.old_value && entry.new_value && (
+              {entry.action !== 'resolution_notes' && entry.action !== 'close_reason' && entry.old_value && entry.new_value && (
                 <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full">
                   {entry.old_value} &rarr; {entry.new_value}
                 </span>
               )}
-              {!entry.old_value && entry.new_value && (
+              {entry.action !== 'resolution_notes' && entry.action !== 'close_reason' && !entry.old_value && entry.new_value && (
                 <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full">
                   &rarr; {entry.new_value}
                 </span>
               )}
             </div>
+            {/* Show resolution/close reason prominently */}
+            {(entry.action === 'resolution_notes' || entry.action === 'close_reason') && entry.new_value && (
+              <div className="mt-1.5 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                <p className="text-sm text-green-800 leading-relaxed whitespace-pre-wrap">{entry.new_value}</p>
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-0.5">
               {entry.performed_by && (
                 <span className="text-xs text-slate-400">by {entry.performed_by}</span>
@@ -704,7 +711,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     mutationFn: (members: { id: string; name: string; slack_user_id?: string }[]) => {
       const primary = members[0]?.id || null;
       const assigneesPayload = members.map(m => ({ id: m.id, name: m.name, slack_user_id: m.slack_user_id }));
-      return updateIssue(issueId, { assigned_to: primary, assignees: assigneesPayload } as Record<string, unknown>);
+      return updateIssue(issueId, { assigned_to: primary, assignees: assigneesPayload });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
@@ -1044,9 +1051,21 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               <Hash className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Channel</span>
             </div>
-            <span className="text-sm font-medium text-slate-900">
-              {issue.slack_channel_name ? `#${issue.slack_channel_name}` : (issue.slack_channel_id || 'N/A')}
-            </span>
+            {issue.slack_channel_id && issue.slack_thread_ts ? (
+              <a
+                href={`https://slack.com/archives/${issue.slack_channel_id}/p${issue.slack_thread_ts.replace('.', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors inline-flex items-center gap-1"
+              >
+                {issue.slack_channel_name ? `#${issue.slack_channel_name}` : issue.slack_channel_id}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <span className="text-sm font-medium text-slate-900">
+                {issue.slack_channel_name ? `#${issue.slack_channel_name}` : (issue.slack_channel_id || 'N/A')}
+              </span>
+            )}
           </div>
 
           {/* Assigned to */}

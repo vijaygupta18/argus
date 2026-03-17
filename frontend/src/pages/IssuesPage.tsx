@@ -12,6 +12,7 @@ import {
   Plus,
   X,
   SlidersHorizontal,
+  User,
 } from 'lucide-react';
 import { fetchIssues, fetchTeams, createIssue } from '../api/client';
 import type { IssueStatus, IssuePriority, Team, Issue } from '../api/types';
@@ -372,6 +373,7 @@ export default function IssuesPage() {
   const teamFilter = searchParams.get('team_id') || '';
   const priorityFilter = (searchParams.get('priority') as IssuePriority) || '';
   const searchQuery = searchParams.get('search') || '';
+  const mineFilter = searchParams.get('mine') === 'true';
   const page = parseInt(searchParams.get('page') || '1', 10);
   const perPage = 20;
 
@@ -405,20 +407,21 @@ export default function IssuesPage() {
   });
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['issues', statusFilter, teamFilter, priorityFilter, searchQuery, page],
+    queryKey: ['issues', statusFilter, teamFilter, priorityFilter, searchQuery, mineFilter, page],
     queryFn: () =>
       fetchIssues({
         status: statusFilter as IssueStatus || undefined,
         team_id: teamFilter || undefined,
         priority: priorityFilter as IssuePriority || undefined,
         search: searchQuery || undefined,
+        mine: mineFilter || undefined,
         page,
         per_page: perPage,
       }),
   });
 
   const totalPages = data ? Math.ceil(data.total / perPage) : 0;
-  const hasActiveFilters = !!(statusFilter || teamFilter || priorityFilter || searchQuery);
+  const hasActiveFilters = !!(statusFilter || teamFilter || priorityFilter || searchQuery || mineFilter);
 
   // Build active filter summary text
   const activeFilterParts: string[] = [];
@@ -428,6 +431,7 @@ export default function IssuesPage() {
     const team = teams.find(t => t.id === teamFilter);
     if (team) activeFilterParts.push(team.name);
   }
+  if (mineFilter) activeFilterParts.push('My Issues');
   if (searchQuery) activeFilterParts.push(`"${searchQuery}"`);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -551,6 +555,20 @@ export default function IssuesPage() {
                 </option>
               ))}
             </select>
+
+            {user && (
+              <button
+                onClick={() => updateFilter('mine', mineFilter ? '' : 'true')}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  mineFilter
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'border border-slate-200 text-slate-700 bg-slate-50 hover:bg-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                My Issues
+              </button>
+            )}
           </div>
         </div>
 
@@ -575,6 +593,12 @@ export default function IssuesPage() {
               <FilterChip
                 label={teams.find(t => t.id === teamFilter)?.name || 'Team'}
                 onRemove={() => updateFilter('team_id', '')}
+              />
+            )}
+            {mineFilter && (
+              <FilterChip
+                label="My Issues"
+                onRemove={() => updateFilter('mine', '')}
               />
             )}
             {searchQuery && (

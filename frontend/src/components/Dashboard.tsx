@@ -39,15 +39,6 @@ function formatCurrentDate(): string {
   });
 }
 
-// Fake trend data for demo polish
-function fakeTrend(value: number): { delta: number; direction: 'up' | 'down' | 'flat' } {
-  if (value === 0) return { delta: 0, direction: 'flat' };
-  const seed = (value * 7 + 3) % 10;
-  if (seed < 3) return { delta: Math.max(1, Math.floor(value * 0.08)), direction: 'down' };
-  if (seed < 7) return { delta: Math.max(1, Math.floor(value * 0.12)), direction: 'up' };
-  return { delta: 0, direction: 'flat' };
-}
-
 // Micro sparkline bar showing relative percentage
 function SparkBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.max(8, (value / max) * 100) : 8;
@@ -454,7 +445,6 @@ export default function Dashboard() {
               sparkColor="bg-slate-400"
               sparkValue={stats?.total_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
-              trend={fakeTrend(stats?.total_issues ?? 0)}
             />
             <StatCard
               label="Open"
@@ -465,7 +455,6 @@ export default function Dashboard() {
               sparkColor="bg-blue-500"
               sparkValue={stats?.open_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
-              trend={fakeTrend(stats?.open_issues ?? 0)}
             />
             <StatCard
               label="In Progress"
@@ -476,7 +465,6 @@ export default function Dashboard() {
               sparkColor="bg-amber-500"
               sparkValue={stats?.in_progress_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
-              trend={fakeTrend(stats?.in_progress_issues ?? 0)}
             />
           </div>
 
@@ -491,7 +479,6 @@ export default function Dashboard() {
               sparkColor="bg-emerald-500"
               sparkValue={stats?.resolved_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
-              trend={fakeTrend(stats?.resolved_issues ?? 0)}
             />
             <StatCard
               label="Critical"
@@ -502,7 +489,6 @@ export default function Dashboard() {
               sparkColor="bg-red-500"
               sparkValue={stats?.critical_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
-              trend={fakeTrend(stats?.critical_issues ?? 0)}
             />
             <StatCard
               label="Avg Resolution"
