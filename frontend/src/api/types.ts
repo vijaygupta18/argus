@@ -15,6 +15,7 @@ export interface Member {
   name: string;
   slack_user_id: string;
   email: string | null;
+  role: 'leader' | 'worker';
   is_active: boolean;
   notifications_muted: boolean;
   open_issue_count: number;
@@ -145,6 +146,7 @@ export interface CreateMemberPayload {
 export interface UpdateMemberPayload {
   name?: string;
   email?: string | null;
+  role?: 'leader' | 'worker';
   is_active?: boolean;
   notifications_muted?: boolean;
 }

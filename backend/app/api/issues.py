@@ -251,6 +251,27 @@ async def update_issue(
                     detail="Only admin or team leader can close issues",
                 )
 
+    # --- Validate assignees are not leaders ---
+    if "assigned_to" in update_data and update_data["assigned_to"]:
+        stmt = select(TeamMember).where(TeamMember.id == update_data["assigned_to"])
+        r = await db.execute(stmt)
+        m = r.scalar_one_or_none()
+        if m and m.role == "leader":
+            raise HTTPException(status_code=400, detail=f"{m.name} is a team leader and cannot be assigned issues")
+
+    if "assignees" in update_data and update_data["assignees"]:
+        leader_names = []
+        for a in update_data["assignees"]:
+            aid = a.get("id") if isinstance(a, dict) else getattr(a, "id", None)
+            if aid:
+                stmt = select(TeamMember).where(TeamMember.id == uuid.UUID(str(aid)))
+                r = await db.execute(stmt)
+                m = r.scalar_one_or_none()
+                if m and m.role == "leader":
+                    leader_names.append(m.name)
+        if leader_names:
+            raise HTTPException(status_code=400, detail=f"{', '.join(leader_names)} are team leaders and cannot be assigned issues")
+
     # Strip 'reason' from update_data before passing to issue_service (it's not a model field)
     reason_text = update_data.pop("reason", None)
 
@@ -393,6 +414,53 @@ async def update_issue(
                 )
         except Exception as e:
             logger.error(f"Failed to DM assignee for issue {issue_id}: {e}")
+
+    # DM all leaders of the team on assignment/reassignment
+    if something_assigned and updated.team_id:
+        try:
+            from app.slack_bot.messages import PRIORITY_COLOR, PRIORITY_EMOJI
+            stmt = select(TeamMember).where(
+                TeamMember.team_id == updated.team_id,
+                TeamMember.role == "leader",
+                TeamMember.is_active == True,
+                TeamMember.slack_user_id != None,
+                TeamMember.slack_user_id != "",
+            )
+            r = await db.execute(stmt)
+            leaders = r.scalars().all()
+
+            if leaders:
+                dashboard_url = f"{settings.app_base_url}/issues/{issue_id}"
+                p = updated.priority or "medium"
+                team_name_display = updated.team.name if updated.team else "Unknown"
+                assigned_by_display = f"<@{user.slack_user_id}>" if user.slack_user_id else user.name
+                new_assignee_names = ", ".join(
+                    a.get("name", "?") for a in (updated.assignees or []) if isinstance(a, dict)
+                ) or (updated.assignee.name if updated.assignee else "Unassigned")
+                old_name = old_assignee_name or "Unassigned"
+
+                for leader in leaders:
+                    leader_dm = [{
+                        "color": PRIORITY_COLOR.get(p, "#6B7280"),
+                        "blocks": [
+                            {"type": "section", "text": {"type": "mrkdwn", "text": ":loudspeaker: *Assignment update in your team*"}},
+                            {"type": "section", "text": {"type": "mrkdwn", "text": f">{updated.title}"}},
+                            {"type": "section", "fields": [
+                                {"type": "mrkdwn", "text": f"*Was:* {old_name}"},
+                                {"type": "mrkdwn", "text": f"*Now:* {new_assignee_names}"},
+                                {"type": "mrkdwn", "text": f"*Priority:* {PRIORITY_EMOJI.get(p, '')} {p.title()}"},
+                                {"type": "mrkdwn", "text": f"*By:* {assigned_by_display}"},
+                            ]},
+                            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+                        ],
+                    }]
+                    await slack_service.post_dm(
+                        user_id=leader.slack_user_id,
+                        text="",
+                        attachments=leader_dm,
+                    )
+        except Exception as e:
+            logger.error(f"Failed to DM leaders for issue {issue_id}: {e}")
 
     # Notify Slack on status change
     if data.status and data.status != old_status and updated.slack_channel_id and updated.slack_thread_ts:

@@ -626,6 +626,14 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
     },
   });
 
+  const toggleMemberRole = useMutation({
+    mutationFn: ({ memberId, role }: { memberId: string; role: 'leader' | 'worker' }) =>
+      updateMember(memberId, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-members', team.id] });
+    },
+  });
+
   const removeMember = useMutation({
     mutationFn: (memberId: string) => deleteMember(memberId),
     onSuccess: () => {
@@ -769,6 +777,25 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                               }`}>
                                 {member.name}
                               </span>
+                              {member.role === 'leader' ? (
+                                <span
+                                  onClick={() => isAdmin ? toggleMemberRole.mutate({ memberId: member.id, role: 'worker' }) : undefined}
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 ${isAdmin ? 'cursor-pointer hover:bg-violet-200' : ''}`}
+                                  title={isAdmin ? 'Click to set as Worker' : 'Leader'}
+                                >
+                                  Leader
+                                </span>
+                              ) : (
+                                isAdmin && (
+                                  <span
+                                    onClick={() => toggleMemberRole.mutate({ memberId: member.id, role: 'leader' })}
+                                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 cursor-pointer hover:bg-violet-100 hover:text-violet-700"
+                                    title="Click to set as Leader"
+                                  >
+                                    Worker
+                                  </span>
+                                )
+                              )}
                               {!member.is_active && (
                                 <span className="text-[10px] font-medium text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full">
                                   Inactive

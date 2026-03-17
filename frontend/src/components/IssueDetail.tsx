@@ -723,7 +723,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       for (const team of allTeams) {
         const members = await fetchTeamMembers(team.id);
         for (const m of members) {
-          if (m.is_active && !seen.has(m.email || m.slack_user_id)) {
+          if (m.is_active && m.role !== 'leader' && !seen.has(m.email || m.slack_user_id)) {
             seen.add(m.email || m.slack_user_id);
             results.push({ member: m, teamName: team.name });
           }
@@ -1009,6 +1009,20 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Mutation error banner */}
+      {(updateMutation.isError || resolveMutation.isError || teamChangeMutation.isError || assignMutation.isError) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700">
+            {updateMutation.isError && 'Failed to update status. '}
+            {resolveMutation.isError && 'Failed to resolve issue. '}
+            {teamChangeMutation.isError && 'Failed to change team. '}
+            {assignMutation.isError && 'Failed to update assignment. '}
+            Please try again.
+          </p>
         </div>
       )}
 
