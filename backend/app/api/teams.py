@@ -39,6 +39,12 @@ async def create_team(
         name=data.name,
         description=data.description,
     )
+    if data.reminder_frequency_minutes is not None:
+        team.reminder_frequency_minutes = data.reminder_frequency_minutes
+    if data.reminder_start_hour is not None:
+        team.reminder_start_hour = data.reminder_start_hour
+    if data.notifications_enabled is not None:
+        team.notifications_enabled = data.notifications_enabled
     db.add(team)
     await db.flush()
     await db.refresh(team)

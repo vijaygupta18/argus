@@ -449,7 +449,6 @@ function AddMemberOverlay({
     mutationFn: (payload: CreateMemberPayload) => createMember(teamId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-members', teamId] });
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
       setSearch('');
       setError('');
       onClose();
@@ -666,7 +665,6 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
     mutationFn: (memberId: string) => deleteMember(memberId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-members', team.id] });
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
       setMemberToRemove(null);
     },
   });

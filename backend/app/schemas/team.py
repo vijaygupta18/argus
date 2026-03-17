@@ -12,7 +12,9 @@ class TeamBase(BaseModel):
 
 
 class TeamCreate(TeamBase):
-    pass
+    reminder_frequency_minutes: int | None = None
+    reminder_start_hour: int | None = None
+    notifications_enabled: bool | None = None
 
 
 class TeamUpdate(BaseModel):
