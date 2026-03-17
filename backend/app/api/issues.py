@@ -2,7 +2,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_, cast, Text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session_maker
@@ -199,14 +199,15 @@ async def get_issue(
     if issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Kick off RCA in background — only once (guard: atomic CAS via WHERE ai_rca IS NULL)
+    # Kick off RCA in background — only once (guard: atomic CAS via WHERE ai_rca IS NULL or JSON null)
     if issue.ai_rca is None and settings.ai_api_key:
         import asyncio
         # Use a fresh session to atomically mark as investigating — avoids duplicate RCA generation
+        # Must handle both SQL NULL and JSON null (asyncpg returns None for both but IS NULL is False for JSON null)
         async with async_session_maker() as guard_session:
             result = await guard_session.execute(
                 update(Issue)
-                .where(Issue.id == issue.id, Issue.ai_rca.is_(None))
+                .where(Issue.id == issue.id, or_(Issue.ai_rca.is_(None), cast(Issue.ai_rca, Text) == "null"))
                 .values(ai_rca={"status": "investigating"})
             )
             await guard_session.commit()
