@@ -1,4 +1,4 @@
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -18,7 +18,7 @@ import {
   Activity,
   CalendarDays,
 } from 'lucide-react';
-import { fetchDashboardStats, fetchTeamStats, fetchIssues, fetchIssueHistory } from '../api/client';
+import { fetchDashboardStats, fetchTeamStats, fetchIssues, fetchRecentActivity } from '../api/client';
 import type { DashboardStats, TeamStats, Issue, IssueHistory } from '../api/types';
 import { formatHours, timeAgo, statusColors } from '../utils/format';
 import { useAuth } from '../contexts/AuthContext';
@@ -232,29 +232,11 @@ function RecentIssueCard({ issue }: { issue: Issue }) {
   );
 }
 
-function ActivityFeed({ recentIssueIds }: { recentIssueIds: string[] }) {
-  const ids = recentIssueIds.slice(0, 5);
-
-  const results = useQueries({
-    queries: ids.map(id => ({
-      queryKey: ['issue-history', id] as const,
-      queryFn: () => fetchIssueHistory(id),
-      enabled: !!id,
-    })),
+function ActivityFeed() {
+  const { data: latest, isLoading } = useQuery<IssueHistory[]>({
+    queryKey: ['recent-activity'],
+    queryFn: () => fetchRecentActivity(5),
   });
-
-  const allHistory: IssueHistory[] = [];
-  for (const r of results) {
-    if (r.data) {
-      allHistory.push(...r.data);
-    }
-  }
-
-  // Sort by created_at desc and take top 5
-  allHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  const latest = allHistory.slice(0, 5);
-
-  const isLoading = results.some(r => r.isLoading);
 
   if (isLoading) {
     return (
@@ -264,7 +246,7 @@ function ActivityFeed({ recentIssueIds }: { recentIssueIds: string[] }) {
     );
   }
 
-  if (latest.length === 0) {
+  if (!latest || latest.length === 0) {
     return (
       <div className="py-8 text-center">
         <Activity className="w-6 h-6 text-slate-200 mx-auto mb-2" />
@@ -569,7 +551,7 @@ export default function Dashboard() {
                 </h2>
               </div>
               <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden">
-                <ActivityFeed recentIssueIds={recentIssueIds} />
+                <ActivityFeed />
               </div>
             </div>
           </div>

@@ -31,8 +31,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { fetchIssue, fetchIssueHistory, updateIssue, resolveIssue, fetchTeams, fetchTeamMembers } from '../api/client';
-import type { Issue, IssueHistory as IssueHistoryType, IssueStatus, Member, Team } from '../api/types';
+import { fetchIssue, fetchIssueHistory, updateIssue, resolveIssue, fetchTeams, fetchAssignableMembers } from '../api/client';
+import type { Issue, IssueHistory as IssueHistoryType, IssueStatus, AssignableMember, Team } from '../api/types';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
 import { formatDate, timeAgo, statusLabels } from '../utils/format';
@@ -720,24 +720,9 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     queryFn: fetchTeams,
   });
 
-  const { data: allMembers } = useQuery<{ member: Member; teamName: string }[]>({
-    queryKey: ['all-members-for-assign', allTeams?.map(t => t.id).join(',')],
-    queryFn: async () => {
-      if (!allTeams) return [];
-      const seen = new Set<string>();
-      const results: { member: Member; teamName: string }[] = [];
-      for (const team of allTeams) {
-        const members = await fetchTeamMembers(team.id);
-        for (const m of members) {
-          if (m.is_active && m.role !== 'leader' && !seen.has(m.email || m.slack_user_id)) {
-            seen.add(m.email || m.slack_user_id);
-            results.push({ member: m, teamName: team.name });
-          }
-        }
-      }
-      return results;
-    },
-    enabled: !!allTeams && allTeams.length > 0,
+  const { data: allMembers } = useQuery<AssignableMember[]>({
+    queryKey: ['assignable-members'],
+    queryFn: fetchAssignableMembers,
   });
 
   if (isLoading) {
@@ -934,18 +919,18 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                     </div>
                     <div className="max-h-64 overflow-y-auto">
                       {allMembers
-                        .filter((entry) => {
+                        .filter((m) => {
                           if (!assignSearch) return true;
                           const q = assignSearch.toLowerCase();
-                          return entry.member.name.toLowerCase().includes(q)
-                            || (entry.member.email || '').toLowerCase().includes(q)
-                            || entry.teamName.toLowerCase().includes(q);
+                          return m.name.toLowerCase().includes(q)
+                            || (m.email || '').toLowerCase().includes(q)
+                            || m.team_name.toLowerCase().includes(q);
                         })
-                        .map((entry) => {
-                          const checked = selectedAssignees.has(entry.member.id);
+                        .map((m) => {
+                          const checked = selectedAssignees.has(m.id);
                           return (
                             <label
-                              key={entry.member.id}
+                              key={m.id}
                               className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-b-0 transition-colors"
                             >
                               <input
@@ -953,15 +938,15 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                                 checked={checked}
                                 onChange={() => {
                                   const next = new Set(selectedAssignees);
-                                  if (checked) next.delete(entry.member.id);
-                                  else next.add(entry.member.id);
+                                  if (checked) next.delete(m.id);
+                                  else next.add(m.id);
                                   setSelectedAssignees(next);
                                 }}
                                 className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-slate-700">{entry.member.name}</div>
-                                <div className="text-xs text-slate-400">{entry.teamName} · {entry.member.open_issue_count} open</div>
+                                <div className="font-medium text-slate-700">{m.name}</div>
+                                <div className="text-xs text-slate-400">{m.team_name}</div>
                               </div>
                             </label>
                           );
@@ -984,8 +969,8 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                         <button
                           onClick={() => {
                             const selected = allMembers
-                              .filter(e => selectedAssignees.has(e.member.id))
-                              .map(e => ({ id: e.member.id, name: e.member.name, slack_user_id: e.member.slack_user_id }));
+                              .filter(m => selectedAssignees.has(m.id))
+                              .map(m => ({ id: m.id, name: m.name, slack_user_id: m.slack_user_id }));
                             assignMutation.mutate(selected);
                           }}
                           disabled={assignMutation.isPending}

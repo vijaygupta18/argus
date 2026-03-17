@@ -9,6 +9,7 @@ import type {
   CreateTeamPayload,
   UpdateTeamPayload,
   Member,
+  AssignableMember,
   CreateMemberPayload,
   UpdateMemberPayload,
   DashboardStats,
@@ -131,6 +132,11 @@ export async function deleteMember(id: string): Promise<void> {
   await api.delete(`/members/${id}`);
 }
 
+export async function fetchAssignableMembers(): Promise<AssignableMember[]> {
+  const { data } = await api.get<AssignableMember[]>('/members/assignable');
+  return data;
+}
+
 // Dashboard
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const { data } = await api.get<DashboardStats>('/dashboard/stats');
@@ -139,6 +145,11 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 
 export async function fetchTeamStats(): Promise<TeamStats[]> {
   const { data } = await api.get<TeamStats[]>('/dashboard/team-stats');
+  return data;
+}
+
+export async function fetchRecentActivity(limit: number = 5): Promise<IssueHistory[]> {
+  const { data } = await api.get<IssueHistory[]>('/dashboard/recent-activity', { params: { limit } });
   return data;
 }
 

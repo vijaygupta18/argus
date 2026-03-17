@@ -37,3 +37,15 @@ class MemberResponse(MemberBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AssignableMemberResponse(BaseModel):
+    """Lightweight member info for the assign dropdown."""
+    id: uuid.UUID
+    name: str
+    email: str | None = None
+    slack_user_id: str
+    team_id: uuid.UUID
+    team_name: str
+
+    model_config = ConfigDict(from_attributes=True)

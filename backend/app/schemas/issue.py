@@ -92,8 +92,27 @@ class IssueResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class IssueListItem(BaseModel):
+    """Lightweight schema for issue list views -- omits large JSONB fields."""
+    id: uuid.UUID
+    title: str
+    status: str
+    priority: str | None = None
+    category: str | None = None
+    team_id: uuid.UUID | None = None
+    assigned_to: uuid.UUID | None = None
+    assignees: list[dict] = []
+    reported_by_name: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    assignee_name: str | None = None
+    team_name: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class IssueListResponse(BaseModel):
-    items: list[IssueResponse]
+    items: list[IssueListItem]
     total: int
     page: int
     per_page: int

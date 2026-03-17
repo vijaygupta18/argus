@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.models.team_member import TeamMember
 
 security = HTTPBearer(auto_error=False)
 
@@ -68,11 +67,9 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    # Get fresh team roles from DB
-    stmt = select(TeamMember).where(TeamMember.email == email)
-    result = await db.execute(stmt)
-    members = result.scalars().all()
-    team_roles = {str(m.team_id): m.role for m in members}
+    # Trust team roles from JWT (computed at login, valid for token lifetime)
+    # instead of running a second DB query on every request.
+    team_roles = payload.get("roles", {})
 
     return UserContext(user=user, team_roles=team_roles)
 

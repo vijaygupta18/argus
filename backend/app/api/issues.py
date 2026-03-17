@@ -12,6 +12,7 @@ from app.models.team_member import TeamMember
 from app.schemas.issue import (
     IssueCreate,
     IssueHistoryResponse,
+    IssueListItem,
     IssueListResponse,
     IssueResponse,
     IssueUpdate,
@@ -81,6 +82,25 @@ async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncS
     return assignee.email == user.email
 
 
+def _issue_to_list_item(issue: Issue) -> IssueListItem:
+    """Convert an Issue model to a lightweight IssueListItem for list views."""
+    return IssueListItem(
+        id=issue.id,
+        title=issue.title,
+        status=issue.status,
+        priority=issue.priority,
+        category=issue.category,
+        team_id=issue.team_id,
+        assigned_to=issue.assigned_to,
+        assignees=issue.assignees or [],
+        reported_by_name=issue.reported_by_name,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+        assignee_name=issue.assignee.name if issue.assignee else None,
+        team_name=issue.team.name if issue.team else None,
+    )
+
+
 @router.get("", response_model=IssueListResponse)
 async def list_issues(
     status: str | None = Query(None, description="Filter by status"),
@@ -105,7 +125,7 @@ async def list_issues(
         per_page=per_page,
     )
 
-    items = [_issue_to_response(issue) for issue in issues]
+    items = [_issue_to_list_item(issue) for issue in issues]
 
     return IssueListResponse(
         items=items,

@@ -1,13 +1,14 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.issue import Issue
+from app.models.issue_history import IssueHistory
 from app.models.team import Team
-from app.schemas.issue import DashboardStats, TeamStats
+from app.schemas.issue import DashboardStats, TeamStats, IssueHistoryResponse
 from app.auth import get_current_user, UserContext
 
 logger = logging.getLogger(__name__)
@@ -20,50 +21,47 @@ async def get_stats(
     db: AsyncSession = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    """Get overall dashboard statistics."""
-    # Total issues count
-    total_stmt = select(func.count(Issue.id))
-    total_result = await db.execute(total_stmt)
-    total_issues = total_result.scalar() or 0
-
-    # Count by status
-    status_stmt = select(
-        Issue.status,
-        func.count(Issue.id),
-    ).group_by(Issue.status)
-    status_result = await db.execute(status_stmt)
-    status_counts = {row[0]: row[1] for row in status_result.all()}
-
-    open_issues = status_counts.get("open", 0)
-    in_progress_issues = status_counts.get("in_progress", 0)
-    resolved_issues = status_counts.get("resolved", 0) + status_counts.get("closed", 0)
-
-    # Critical issues (open or in_progress)
-    critical_stmt = select(func.count(Issue.id)).where(
-        Issue.priority == "critical",
-        Issue.status.in_(["open", "in_progress"]),
-    )
-    critical_result = await db.execute(critical_stmt)
-    critical_issues = critical_result.scalar() or 0
-
-    # Average resolution time in hours (for resolved issues with resolved_at)
-    avg_stmt = select(
+    """Get overall dashboard statistics in a single query."""
+    # Combine all dashboard stats into one query using conditional aggregation
+    stmt = select(
+        func.count(Issue.id).label("total"),
+        func.count(case((Issue.status == "open", Issue.id))).label("open"),
+        func.count(case((Issue.status == "in_progress", Issue.id))).label("in_progress"),
+        func.count(
+            case((Issue.status.in_(["resolved", "closed"]), Issue.id))
+        ).label("resolved"),
+        func.count(
+            case(
+                (
+                    (Issue.priority == "critical")
+                    & Issue.status.in_(["open", "in_progress"]),
+                    Issue.id,
+                )
+            )
+        ).label("critical"),
         func.avg(
-            extract("epoch", Issue.resolved_at) - extract("epoch", Issue.created_at)
-        )
-    ).where(
-        Issue.resolved_at.isnot(None),
+            case(
+                (
+                    Issue.resolved_at.isnot(None),
+                    extract("epoch", Issue.resolved_at)
+                    - extract("epoch", Issue.created_at),
+                )
+            )
+        ).label("avg_resolution_seconds"),
     )
-    avg_result = await db.execute(avg_stmt)
-    avg_seconds = avg_result.scalar()
+
+    result = await db.execute(stmt)
+    row = result.one()
+
+    avg_seconds = row.avg_resolution_seconds
     avg_resolution_hours = round(avg_seconds / 3600, 1) if avg_seconds else None
 
     return DashboardStats(
-        total_issues=total_issues,
-        open_issues=open_issues,
-        in_progress_issues=in_progress_issues,
-        resolved_issues=resolved_issues,
-        critical_issues=critical_issues,
+        total_issues=row.total,
+        open_issues=row.open,
+        in_progress_issues=row.in_progress,
+        resolved_issues=row.resolved,
+        critical_issues=row.critical,
         avg_resolution_hours=avg_resolution_hours,
     )
 
@@ -123,3 +121,20 @@ async def get_team_stats(
         )
 
     return team_stats
+
+
+@router.get("/recent-activity", response_model=list[IssueHistoryResponse])
+async def get_recent_activity(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Get the most recent activity across all issues."""
+    stmt = (
+        select(IssueHistory)
+        .order_by(IssueHistory.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+    return [IssueHistoryResponse.model_validate(e) for e in entries]

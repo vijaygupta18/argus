@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.orm import joinedload
+
 from app.database import get_db
 from app.models.team import Team
 from app.models.team_member import TeamMember
-from app.schemas.member import MemberCreate, MemberResponse, MemberUpdate
+from app.schemas.member import AssignableMemberResponse, MemberCreate, MemberResponse, MemberUpdate
 from app.auth import get_current_user, UserContext
 
 logger = logging.getLogger(__name__)
@@ -121,6 +123,40 @@ async def add_member(
 
     logger.info(f"Added member {member.name} (role={role}) to team {team_id} (id={member.id}, slack={slack_user_id}) by {user.email}")
     return MemberResponse.model_validate(member)
+
+
+@member_router.get("/assignable", response_model=list[AssignableMemberResponse])
+async def list_assignable_members(
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """List all active non-leader members across all teams in a single query.
+
+    Replaces the frontend N+1 pattern of fetching teams then members per team.
+    """
+    stmt = (
+        select(TeamMember)
+        .options(joinedload(TeamMember.team))
+        .where(
+            TeamMember.is_active == True,
+            TeamMember.role == "worker",
+        )
+        .order_by(TeamMember.name)
+    )
+    result = await db.execute(stmt)
+    members = result.unique().scalars().all()
+
+    return [
+        AssignableMemberResponse(
+            id=m.id,
+            name=m.name,
+            email=m.email,
+            slack_user_id=m.slack_user_id,
+            team_id=m.team_id,
+            team_name=m.team.name if m.team else "Unknown",
+        )
+        for m in members
+    ]
 
 
 @member_router.get("/{member_id}", response_model=MemberResponse)

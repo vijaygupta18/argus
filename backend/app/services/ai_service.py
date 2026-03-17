@@ -164,6 +164,7 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
 
             tool_calls = []
             analysis_text = ""
+            got_batch_tools = False  # True if tool_calls batch event already populated tool_calls
 
             async with httpx.AsyncClient(timeout=httpx.Timeout(float(settings.vishwakarma_timeout), connect=30.0)) as client:
                 async with client.stream(
@@ -197,21 +198,32 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
 
                             logger.debug(f"Vishwakarma event={current_event!r} data={current_data[:120]}")
 
-                            if current_event == "tool_call_start":
-                                tool_name = (
-                                    data.get("tool_name")
-                                    or data.get("name")
-                                    or data.get("content")
-                                    or data.get("tool")
-                                    or "unknown"
-                                )
-                                tool_calls.append({"tool": tool_name, "status": "running"})
-                                logger.info(f"Vishwakarma tool call: {tool_name}")
+                            if current_event == "tool_calls":
+                                # Batch event: {"tool_calls": [{"function": {"name": "..."}}]}
+                                # Vishwakarma delivers these all at once at end of stream
+                                tool_calls = []  # reset to avoid duplication with tool_call_start
+                                for tc in data.get("tool_calls", []):
+                                    fn = tc.get("function", {})
+                                    tool_name = fn.get("name") or tc.get("name") or "unknown"
+                                    tool_calls.append({"tool": tool_name, "status": "done"})
+                                    logger.info(f"Vishwakarma tool call (batch): {tool_name}")
+                                got_batch_tools = True
 
-                                if issue_id and db_session_maker:
-                                    await self._save_rca_progress(
-                                        issue_id, db_session_maker, tool_calls, None
+                            elif current_event == "tool_call_start":
+                                if not got_batch_tools:
+                                    tool_name = (
+                                        data.get("tool_name")
+                                        or data.get("name")
+                                        or data.get("content")
+                                        or data.get("tool")
+                                        or "unknown"
                                     )
+                                    tool_calls.append({"tool": tool_name, "status": "running"})
+                                    logger.info(f"Vishwakarma tool call: {tool_name}")
+                                    if issue_id and db_session_maker:
+                                        await self._save_rca_progress(
+                                            issue_id, db_session_maker, tool_calls, None
+                                        )
 
                             elif current_event == "tool_call_result":
                                 tool_name = (

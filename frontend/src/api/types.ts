@@ -81,6 +81,15 @@ export interface TeamStats {
   avg_resolution_hours: number | null;
 }
 
+export interface AssignableMember {
+  id: string;
+  name: string;
+  email: string | null;
+  slack_user_id: string;
+  team_id: string;
+  team_name: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
