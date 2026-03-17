@@ -1,0 +1,155 @@
+import logging
+import re
+
+from sqlalchemy import select
+
+from app.database import async_session_maker
+from app.models.team import Team
+from app.services.ai_service import ai_service
+from app.services.assignment_service import assign_issue
+from app.services.issue_service import create_issue
+from app.services.slack_service import slack_service
+from app.slack_bot.messages import format_issue_created_blocks
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def register_handlers(app):
+    """Register all Slack event handlers on the Bolt app."""
+
+    @app.event("app_mention")
+    async def handle_mention(event, say, client):
+        """Main entry point: someone tagged the bot to report an issue."""
+        channel = event["channel"]
+        thread_ts = event.get("thread_ts", event["ts"])
+        message_ts = event["ts"]
+        user_id = event["user"]
+        raw_text = event.get("text", "")
+
+        # Remove bot mention prefix (e.g., "<@U12345> some message" -> "some message")
+        text = re.sub(r"<@[A-Z0-9]+>\s*", "", raw_text).strip()
+
+        if not text:
+            await say(
+                text="Please describe the issue you'd like to report.",
+                thread_ts=thread_ts,
+            )
+            return
+
+        # 1. Acknowledge with reaction
+        try:
+            await slack_service.add_reaction(channel, message_ts, "eyes")
+        except Exception as e:
+            logger.warning(f"Failed to add reaction: {e}")
+
+        # 1b. Fetch reporter info (name + email) and channel name from Slack
+        reporter_info = await slack_service.get_user_info(user_id)
+        reporter_name = reporter_info.get("name", "Unknown")
+        reporter_email = reporter_info.get("email")
+        channel_name = await slack_service.get_channel_name(channel)
+
+        async with async_session_maker() as db:
+            try:
+                # 2. Get teams from DB
+                stmt = select(Team).order_by(Team.name)
+                result = await db.execute(stmt)
+                teams = result.scalars().all()
+
+                if not teams:
+                    await say(
+                        text="No teams are configured yet. Please add teams in the dashboard first.",
+                        thread_ts=thread_ts,
+                    )
+                    return
+
+                teams_data = [
+                    {"name": t.name, "description": t.description, "id": str(t.id)}
+                    for t in teams
+                ]
+
+                # 3. AI categorize
+                categorization = await ai_service.categorize_issue(text, teams_data)
+
+                # Find the matching team
+                matched_team = None
+                for t in teams:
+                    if t.name.lower() == categorization.get("team_name", "").lower():
+                        matched_team = t
+                        break
+
+                # Fallback to first team if no match
+                if matched_team is None:
+                    matched_team = teams[0]
+
+                # 4. Auto-assign via load balancing
+                assignee = await assign_issue(db, matched_team.id)
+
+                # 5. Create issue in DB
+                issue = await create_issue(
+                    db,
+                    title=categorization.get("title", text[:100]),
+                    description=text,
+                    status="open",
+                    priority=categorization.get("priority", "medium"),
+                    category=categorization.get("category"),
+                    team_id=matched_team.id,
+                    assigned_to=assignee.id if assignee else None,
+                    reported_by_slack_id=user_id,
+                    reported_by_name=reporter_name,
+                    reported_by_email=reporter_email,
+                    slack_channel_id=channel,
+                    slack_channel_name=channel_name,
+                    slack_thread_ts=thread_ts,
+                    slack_message_ts=message_ts,
+                    ai_categorization=categorization,
+                    ai_provider_used=settings.ai_provider,
+                )
+
+                await db.commit()
+
+                # 6. Reply in thread with rich attachment message
+                fallback, attachments = format_issue_created_blocks(
+                    issue, assignee, settings.app_base_url
+                )
+
+                await say(text=fallback, attachments=attachments, thread_ts=thread_ts)
+
+                # 7. DM the assigned person
+                if assignee and assignee.slack_user_id:
+                    try:
+                        dashboard_url = f"{settings.app_base_url}/issues/{issue.id}"
+                        dm_text = (
+                            f":bust_in_silhouette: *You've been assigned a new issue*\n"
+                            f"*Title:* {issue.title}\n"
+                            f"*Priority:* {issue.priority or 'medium'}\n"
+                            f"*Team:* {matched_team.name}\n"
+                            f"*Reported by:* {reporter_name}\n"
+                            f"*Dashboard:* <{dashboard_url}|View Issue>"
+                        )
+                        await slack_service.post_dm(
+                            user_id=assignee.slack_user_id,
+                            text=dm_text,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to DM assignee: {e}")
+
+                logger.info(
+                    f"Created issue from Slack: {issue.id} - {issue.title} "
+                    f"(team={matched_team.name}, assignee={assignee.name if assignee else 'none'})"
+                )
+
+            except Exception as e:
+                logger.error(f"Error handling app_mention: {e}", exc_info=True)
+                await db.rollback()
+                await say(
+                    text=f"Sorry, I encountered an error while processing your issue: {str(e)}",
+                    thread_ts=thread_ts,
+                )
+
+    @app.event("message")
+    async def handle_message(event, say):
+        """Handle general messages (needed to prevent warning logs from Bolt)."""
+        # We only act on app_mention events, but Bolt requires a handler
+        # for message events to avoid unhandled event warnings.
+        pass

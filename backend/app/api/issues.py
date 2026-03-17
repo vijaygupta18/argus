@@ -1,0 +1,433 @@
+import uuid
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db, async_session_maker
+from app.models.issue import Issue
+from app.models.issue_history import IssueHistory
+from app.models.team_member import TeamMember
+from app.schemas.issue import (
+    IssueCreate,
+    IssueHistoryResponse,
+    IssueListResponse,
+    IssueResponse,
+    IssueUpdate,
+    ResolveRequest,
+)
+from app.services import issue_service
+from app.services.ai_service import ai_service
+from app.services.slack_service import slack_service
+from app.config import settings
+from app.auth import get_current_user, UserContext
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/issues", tags=["issues"])
+
+
+def _issue_to_response(issue: Issue) -> IssueResponse:
+    """Convert an Issue model to IssueResponse, including relationship names."""
+    assignee_name = None
+    if issue.assignee:
+        assignee_name = issue.assignee.name
+
+    team_name = None
+    if issue.team:
+        team_name = issue.team.name
+
+    return IssueResponse(
+        id=issue.id,
+        title=issue.title,
+        description=issue.description,
+        status=issue.status,
+        priority=issue.priority,
+        category=issue.category,
+        team_id=issue.team_id,
+        assigned_to=issue.assigned_to,
+        reported_by_slack_id=issue.reported_by_slack_id,
+        reported_by_name=issue.reported_by_name,
+        reported_by_email=issue.reported_by_email,
+        slack_channel_id=issue.slack_channel_id,
+        slack_channel_name=issue.slack_channel_name,
+        slack_thread_ts=issue.slack_thread_ts,
+        slack_message_ts=issue.slack_message_ts,
+        ai_categorization=issue.ai_categorization,
+        ai_rca=issue.ai_rca,
+        ai_provider_used=issue.ai_provider_used,
+        resolved_at=issue.resolved_at,
+        resolved_by=issue.resolved_by,
+        notifications_muted=issue.notifications_muted,
+        last_reminder_sent_at=issue.last_reminder_sent_at,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+        assignee_name=assignee_name,
+        team_name=team_name,
+    )
+
+
+async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncSession) -> bool:
+    """Check if the issue is assigned to a team member whose email matches the user."""
+    if not issue.assigned_to:
+        return False
+    stmt = select(TeamMember).where(TeamMember.id == issue.assigned_to)
+    result = await db.execute(stmt)
+    assignee = result.scalar_one_or_none()
+    if assignee is None:
+        return False
+    return assignee.email == user.email
+
+
+@router.get("", response_model=IssueListResponse)
+async def list_issues(
+    status: str | None = Query(None, description="Filter by status"),
+    team_id: uuid.UUID | None = Query(None, description="Filter by team ID"),
+    assigned_to: uuid.UUID | None = Query(None, description="Filter by assignee ID"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """List issues with optional filters and pagination."""
+    issues, total = await issue_service.list_issues(
+        db,
+        status=status,
+        team_id=team_id,
+        assigned_to=assigned_to,
+        page=page,
+        per_page=per_page,
+    )
+
+    items = [_issue_to_response(issue) for issue in issues]
+
+    return IssueListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+async def _generate_rca_background(issue_id: uuid.UUID, title: str, description: str, category: str, team_name: str):
+    """Generate RCA in background and save to DB."""
+    try:
+        rca = await ai_service.generate_rca(
+            issue_title=title,
+            issue_description=description,
+            category=category,
+            team_name=team_name,
+        )
+        async with async_session_maker() as db:
+            stmt = select(Issue).where(Issue.id == issue_id)
+            result = await db.execute(stmt)
+            issue = result.scalar_one_or_none()
+            if issue:
+                issue.ai_rca = rca
+                issue.ai_provider_used = settings.ai_provider
+                await db.commit()
+                logger.info(f"Background RCA generated for issue {issue_id}")
+    except Exception as e:
+        logger.error(f"Background RCA generation failed for {issue_id}: {e}")
+
+
+@router.get("/{issue_id}", response_model=IssueResponse)
+async def get_issue(
+    issue_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Get a single issue with details. Triggers RCA generation in background if not yet available."""
+    issue = await issue_service.get_issue_with_details(db, issue_id)
+
+    if issue is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Kick off RCA in background — don't block the response
+    if issue.ai_rca is None and settings.ai_api_key:
+        import asyncio
+        team_name = issue.team.name if issue.team else "Unknown"
+        asyncio.create_task(_generate_rca_background(
+            issue.id, issue.title, issue.description, issue.category or "other", team_name
+        ))
+
+    return _issue_to_response(issue)
+
+
+@router.post("", response_model=IssueResponse, status_code=201)
+async def create_issue(
+    data: IssueCreate,
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Create a new issue via API."""
+    issue = await issue_service.create_issue(
+        db,
+        title=data.title,
+        description=data.description,
+        priority=data.priority,
+        team_id=data.team_id,
+    )
+
+    # Reload with relationships
+    created = await issue_service.get_issue_with_details(db, issue.id)
+    return _issue_to_response(created)
+
+
+@router.patch("/{issue_id}", response_model=IssueResponse)
+async def update_issue(
+    issue_id: uuid.UUID,
+    data: IssueUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Update an issue with role-based permission checks."""
+    # Get old issue before update
+    old_issue = await issue_service.get_issue_with_details(db, issue_id)
+    if old_issue is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    old_status = old_issue.status
+
+    update_data = data.model_dump(exclude_unset=True)
+
+    # --- Permission checks ---
+    if not user.is_admin:
+        is_leader_of_issue_team = old_issue.team_id and user.is_leader_of(old_issue.team_id)
+        is_assigned_to_user = await _is_issue_assigned_to_user(old_issue, user, db)
+
+        if is_leader_of_issue_team:
+            # Leaders can update issues assigned to their team - all fields allowed
+            pass
+        elif is_assigned_to_user:
+            # Workers can only change status of issues assigned to them
+            allowed_fields = {"status", "reason"}
+            disallowed = set(update_data.keys()) - allowed_fields
+            if disallowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Workers can only change issue status. Cannot update: {', '.join(disallowed)}",
+                )
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="You don't have permission to update this issue",
+            )
+
+    # --- Status-specific checks ---
+    new_status = data.status
+
+    # If closing, require a reason
+    if new_status == "closed":
+        reason = update_data.get("reason")
+        if not reason:
+            raise HTTPException(
+                status_code=400,
+                detail="A reason is required when closing an issue",
+            )
+        # Only admin or leader can close
+        if not user.is_admin:
+            is_leader_of_issue_team = old_issue.team_id and user.is_leader_of(old_issue.team_id)
+            if not is_leader_of_issue_team:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only admin or team leader can close issues",
+                )
+
+    # Strip 'reason' from update_data before passing to issue_service (it's not a model field)
+    reason_text = update_data.pop("reason", None)
+
+    # Build an IssueUpdate without the reason field for the service
+    service_updates = IssueUpdate(**{k: v for k, v in update_data.items()})
+
+    try:
+        issue = await issue_service.update_issue(db, issue_id, service_updates, performed_by=user.name)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Record close reason in history if provided
+    if new_status == "closed" and reason_text:
+        await issue_service.add_history(
+            db,
+            issue_id,
+            action="close_reason",
+            new_value=reason_text,
+            performed_by=user.name,
+        )
+
+    updated = await issue_service.get_issue_with_details(db, issue.id)
+
+    # Notify Slack on assignment change + DM the new assignee
+    old_assigned_id = str(old_issue.assigned_to) if old_issue.assigned_to else ""
+    new_assigned_id = str(updated.assigned_to) if updated.assigned_to else ""
+    assignment_changed = old_assigned_id != new_assigned_id
+
+    if assignment_changed and updated.slack_channel_id and updated.slack_thread_ts:
+        try:
+            from app.slack_bot.messages import format_assignment_blocks
+            old_assignee_name = old_issue.assignee.name if old_issue.assignee else None
+            new_assignee = updated.assignee
+            fallback, blocks = format_assignment_blocks(
+                updated, old_assignee_name, new_assignee, user.name, settings.app_base_url
+            )
+            # Post in thread
+            await slack_service.post_thread_message(
+                channel=updated.slack_channel_id,
+                thread_ts=updated.slack_thread_ts,
+                text=fallback,
+                blocks=blocks,
+            )
+            logger.info(f"Slack assignment notification sent for issue {issue_id}")
+        except Exception as e:
+            logger.error(f"Failed to notify Slack on assignment change for {issue_id}: {e}", exc_info=True)
+
+    # DM the new assignee
+    if assignment_changed and updated.assignee and updated.assignee.slack_user_id:
+        try:
+            dashboard_url = f"{settings.app_base_url}/issues/{issue_id}"
+            dm_text = (
+                f":bust_in_silhouette: *You've been assigned an issue*\n"
+                f"*Title:* {updated.title}\n"
+                f"*Priority:* {updated.priority or 'medium'}\n"
+                f"*Team:* {updated.team.name if updated.team else 'Unknown'}\n"
+                f"*Assigned by:* {user.name}\n"
+                f"*Dashboard:* <{dashboard_url}|View Issue>"
+            )
+            await slack_service.post_dm(
+                user_id=updated.assignee.slack_user_id,
+                text=dm_text,
+            )
+        except Exception as e:
+            logger.error(f"Failed to DM assignee for issue {issue_id}: {e}")
+
+    # Notify Slack on status change
+    if data.status and data.status != old_status and updated.slack_channel_id and updated.slack_thread_ts:
+        try:
+            from app.slack_bot.messages import format_status_change_blocks, STATUS_EMOJI
+            msg_ts = updated.slack_message_ts or updated.slack_thread_ts
+
+            # Remove ALL status emojis first
+            for emoji in STATUS_EMOJI.values():
+                await slack_service.remove_reaction(updated.slack_channel_id, msg_ts, emoji)
+
+            # Add only the new status emoji
+            new_emoji = STATUS_EMOJI.get(data.status)
+            if new_emoji:
+                await slack_service.add_reaction(updated.slack_channel_id, msg_ts, new_emoji)
+
+            # Post rich status change message in thread
+            fallback, blocks = format_status_change_blocks(updated, old_status, data.status, settings.app_base_url)
+            await slack_service.post_thread_message(
+                channel=updated.slack_channel_id,
+                thread_ts=updated.slack_thread_ts,
+                text=fallback,
+                blocks=blocks,
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify Slack on status change for {issue_id}: {e}")
+
+    return _issue_to_response(updated)
+
+
+@router.post("/{issue_id}/resolve", response_model=IssueResponse)
+async def resolve_issue(
+    issue_id: uuid.UUID,
+    body: ResolveRequest,
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Resolve an issue. Requires a reason. Optionally notify in Slack thread."""
+    # Get issue to check permissions
+    old_issue = await issue_service.get_issue_with_details(db, issue_id)
+    if old_issue is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Permission check
+    if not user.is_admin:
+        is_leader_of_issue_team = old_issue.team_id and user.is_leader_of(old_issue.team_id)
+        is_assigned_to_user = await _is_issue_assigned_to_user(old_issue, user, db)
+
+        if not is_leader_of_issue_team and not is_assigned_to_user:
+            raise HTTPException(
+                status_code=403,
+                detail="You don't have permission to resolve this issue",
+            )
+
+    # Find the current user's team_member ID to record as resolved_by
+    resolver_member_id = body.resolved_by
+    if not resolver_member_id:
+        stmt = select(TeamMember).where(TeamMember.email == user.email).limit(1)
+        result = await db.execute(stmt)
+        resolver_member = result.scalar_one_or_none()
+        if resolver_member:
+            resolver_member_id = resolver_member.id
+
+    try:
+        issue = await issue_service.resolve_issue(
+            db, issue_id, resolved_by_id=resolver_member_id, notes=body.reason,
+            performed_by=user.name,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Release assignment if there was an assignee
+    if issue.assigned_to:
+        from app.services.assignment_service import release_assignment
+        await release_assignment(db, issue.assigned_to)
+
+    # Notify in Slack thread
+    if issue.slack_channel_id and issue.slack_thread_ts:
+        try:
+            from app.slack_bot.messages import STATUS_EMOJI, format_resolution_blocks
+            msg_ts = issue.slack_message_ts or issue.slack_thread_ts
+
+            # Remove ALL status emojis
+            for emoji in STATUS_EMOJI.values():
+                await slack_service.remove_reaction(issue.slack_channel_id, msg_ts, emoji)
+
+            # Add only resolved emoji
+            await slack_service.add_reaction(issue.slack_channel_id, msg_ts, "white_check_mark")
+
+            # The person who clicked Resolve — use @mention if they have a Slack ID
+            if user.slack_user_id:
+                resolved_by_display = f"<@{user.slack_user_id}>"
+            else:
+                resolved_by_display = user.name
+
+            # Post rich resolution message
+            fallback, blocks = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url)
+            await slack_service.post_thread_message(
+                channel=issue.slack_channel_id,
+                thread_ts=issue.slack_thread_ts,
+                text=fallback,
+                blocks=blocks,
+            )
+        except Exception as e:
+            logger.error(f"Failed to post Slack resolution for issue {issue_id}: {e}")
+
+    resolved = await issue_service.get_issue_with_details(db, issue.id)
+    return _issue_to_response(resolved)
+
+
+@router.get("/{issue_id}/history", response_model=list[IssueHistoryResponse])
+async def get_issue_history(
+    issue_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """Get the history of changes for an issue."""
+    # Verify issue exists
+    stmt = select(Issue).where(Issue.id == issue_id)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    stmt = (
+        select(IssueHistory)
+        .where(IssueHistory.issue_id == issue_id)
+        .order_by(IssueHistory.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    history = result.scalars().all()
+
+    return [IssueHistoryResponse.model_validate(h) for h in history]
