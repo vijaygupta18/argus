@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
+# Hold references to background tasks to prevent garbage collection
+_background_tasks: set = set()
+
 
 def _issue_to_response(issue: Issue) -> IssueResponse:
     """Convert an Issue model to IssueResponse, including relationship names."""
@@ -81,9 +84,13 @@ async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncS
             return True
     # Check multi-assignees JSONB array
     for a in (issue.assignees or []):
-        if isinstance(a, dict) and a.get("slack_user_id") == user.slack_user_id:
+        if not isinstance(a, dict):
+            continue
+        # Match by slack_user_id only when both are non-empty (avoids None == None false match)
+        if user.slack_user_id and a.get("slack_user_id") and a.get("slack_user_id") == user.slack_user_id:
             return True
-        if isinstance(a, dict) and a.get("name") == user.name:
+        # Name fallback for users without Slack ID
+        if a.get("name") and user.name and a.get("name") == user.name:
             return True
     return False
 
@@ -122,13 +129,15 @@ async def list_issues(
     user: UserContext = Depends(get_current_user),
 ):
     """List issues with optional filters, search, and pagination."""
-    # If mine=true, find the user's team member IDs and filter by assigned_to
+    # If mine=true, find ALL the user's team member IDs and filter by any of them
+    my_member_ids: list[uuid.UUID] | None = None
     if mine and not assigned_to:
-        stmt = select(TeamMember).where(TeamMember.email == user.email)
+        stmt = select(TeamMember.id).where(TeamMember.email == user.email)
         result = await db.execute(stmt)
-        my_members = result.scalars().all()
-        if my_members:
-            assigned_to = my_members[0].id
+        my_member_ids = [row[0] for row in result.all()]
+        if not my_member_ids:
+            # User has no team memberships — return empty results
+            return IssueListResponse(items=[], total=0, page=page, per_page=per_page)
 
     issues, total = await issue_service.list_issues(
         db,
@@ -136,6 +145,7 @@ async def list_issues(
         priority=priority,
         team_id=team_id,
         assigned_to=assigned_to,
+        assigned_to_any=my_member_ids,
         reported_by_email=reported_by_email,
         search=search,
         page=page,
@@ -189,21 +199,25 @@ async def get_issue(
     if issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Kick off RCA in background — only once (guard: set investigating before spawning)
+    # Kick off RCA in background — only once (guard: atomic CAS via WHERE ai_rca IS NULL)
     if issue.ai_rca is None and settings.ai_api_key:
         import asyncio
-        # Use a fresh session to mark as investigating — avoids greenlet context issues
+        # Use a fresh session to atomically mark as investigating — avoids duplicate RCA generation
         async with async_session_maker() as guard_session:
-            await guard_session.execute(
+            result = await guard_session.execute(
                 update(Issue)
-                .where(Issue.id == issue.id)
+                .where(Issue.id == issue.id, Issue.ai_rca.is_(None))
                 .values(ai_rca={"status": "investigating"})
             )
             await guard_session.commit()
-        team_name = issue.team.name if issue.team else "Unknown"
-        asyncio.create_task(_generate_rca_background(
-            issue.id, issue.title, issue.description, issue.category or "other", team_name
-        ))
+        # Only spawn background task if we won the race (rowcount == 1)
+        if result.rowcount == 1:
+            team_name = issue.team.name if issue.team else "Unknown"
+            task = asyncio.create_task(_generate_rca_background(
+                issue.id, issue.title, issue.description, issue.category or "other", team_name
+            ))
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
 
     return _issue_to_response(issue)
 

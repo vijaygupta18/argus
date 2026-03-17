@@ -67,9 +67,12 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    # Trust team roles from JWT (computed at login, valid for token lifetime)
-    # instead of running a second DB query on every request.
-    team_roles = payload.get("roles", {})
+    # Refresh team roles from DB to avoid stale JWT roles after role changes.
+    # The JWT may be valid for days; roles could change in that window.
+    from app.models.team_member import TeamMember
+    role_stmt = select(TeamMember.team_id, TeamMember.role).where(TeamMember.email == email)
+    role_result = await db.execute(role_stmt)
+    team_roles = {str(row.team_id): row.role for row in role_result.all()}
 
     return UserContext(user=user, team_roles=team_roles)
 

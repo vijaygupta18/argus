@@ -1134,9 +1134,9 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               <h3 className="text-sm font-semibold text-slate-900">AI Investigating...</h3>
               <p className="text-xs text-slate-400">
                 {(issue.ai_rca as Record<string, unknown>).tools_called as number || 0} tools checked
-                {((issue.ai_rca as Record<string, unknown>).tools_running as number) > 0 && (
+                {Number((issue.ai_rca as Record<string, unknown>).tools_running) > 0 ? (
                   <>, {(issue.ai_rca as Record<string, unknown>).tools_running as number} running</>
-                )}
+                ) : null}
               </p>
             </div>
           </div>

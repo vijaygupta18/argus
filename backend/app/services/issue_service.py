@@ -95,6 +95,10 @@ async def update_issue(
     actor = performed_by or "api"
     update_data = updates.model_dump(exclude_unset=True)
 
+    # Strip fields that are not actual Issue model columns (e.g. "reason")
+    issue_columns = {c.key for c in Issue.__table__.columns}
+    update_data = {k: v for k, v in update_data.items() if k in issue_columns}
+
     for field, new_value in update_data.items():
         old_value = getattr(issue, field, None)
 
@@ -213,6 +217,7 @@ async def list_issues(
     priority: str | None = None,
     team_id: uuid.UUID | None = None,
     assigned_to: uuid.UUID | None = None,
+    assigned_to_any: list[uuid.UUID] | None = None,
     reported_by_email: str | None = None,
     search: str | None = None,
     page: int = 1,
@@ -240,6 +245,10 @@ async def list_issues(
     if assigned_to:
         base_stmt = base_stmt.where(Issue.assigned_to == assigned_to)
         count_stmt = count_stmt.where(Issue.assigned_to == assigned_to)
+
+    if assigned_to_any:
+        base_stmt = base_stmt.where(Issue.assigned_to.in_(assigned_to_any))
+        count_stmt = count_stmt.where(Issue.assigned_to.in_(assigned_to_any))
 
     if reported_by_email:
         base_stmt = base_stmt.where(Issue.reported_by_email == reported_by_email)
