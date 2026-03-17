@@ -45,6 +45,11 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
+    # Dispose the connection pool to release all connections to the shared RDS
+    from app.database import engine
+    await engine.dispose()
+    logger.info("Database connection pool disposed.")
+
     logger.info("Shutdown complete.")
 
 

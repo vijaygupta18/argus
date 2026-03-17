@@ -80,10 +80,12 @@ class SlackService:
         if not self._check_client():
             return None
         try:
-            response = await self.client.chat_postMessage(
-                channel=channel,
-                text=text,
-                blocks=blocks,
+            kwargs: dict = {"channel": channel, "text": text}
+            if blocks:
+                kwargs["blocks"] = blocks
+            response = await self._retry_on_rate_limit(
+                lambda: self.client.chat_postMessage(**kwargs),
+                description="post_message",
             )
             return response.data
         except SlackApiError as e:

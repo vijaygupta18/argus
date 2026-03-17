@@ -14,9 +14,12 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Environment
+# Environment / secrets
 .env
+.env.*
 *.env.local
+*.pem
+*.key
 
 # IDE
 .vscode/

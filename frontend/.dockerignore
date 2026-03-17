@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output (will be rebuilt in Docker)
+dist/
+.vite/
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store

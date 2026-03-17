@@ -1,90 +1,89 @@
-# Production Issue Dashboard
+# Argus — Production Issue Dashboard
 
-A real-time dashboard for tracking, triaging, and resolving production issues with Slack integration and AI-powered categorization.
+Real-time dashboard for tracking, triaging, and resolving production issues — with Slack integration, AI-powered RCA, and team management.
 
-## Features
+**Production URL**: https://argus.internal.nammayatri.in
+**Deployment**: EKS `monitoring` namespace, single-container pod on SPOT nodes
+**Deploy reference**: [`prodk8s/DEPLOY.md`](prodk8s/DEPLOY.md)
 
-- **Slack Integration** -- Report issues directly from Slack using slash commands or bot mentions; receive threaded updates and reminders in your channels.
-- **AI Categorization & RCA** -- Automatically categorize incoming issues by type and severity, and generate root cause analysis suggestions using Claude or other LLM providers via LiteLLM.
-- **Auto-Assignment** -- Round-robin assignment of new issues to team members based on current workload and availability.
-- **Configurable Reminders** -- Periodic Slack reminders for open issues with per-team frequency and quiet-hours settings.
-- **Dashboard & Analytics** -- Web UI showing open/in-progress/resolved issue counts, team-level stats, average resolution times, and historical trends.
-- **Team Management** -- Create teams, add members with Slack identity mapping, and control notification preferences.
-- **Full Audit Trail** -- Every status change, assignment, and update is recorded in the issue history.
+---
 
-## Quick Start
+## What it does
 
-### 1. Clone and configure
+- **Slack-first reporting** — Issues reported in Slack threads are automatically captured; bot posts updates back in the same thread
+- **AI Root Cause Analysis** — Streams live investigation via Vishwakarma (SSE), renders full markdown RCA in the dashboard
+- **Smart assignment** — Issues assigned to workers (not leaders); assignees get DM'd; leaders get notified on every assignment/reassignment
+- **Team roles** — Each team has workers (get assigned) and leaders (oversee, never assigned, always notified)
+- **Configurable reminders** — Per-team Slack reminders on unresolved issues with custom frequency and start hour
+- **Google OAuth** — Login with `@nammayatri.in` Google accounts; admin access controlled via `ADMIN_EMAILS`
+- **Full audit trail** — Every status change, assignment, and resolution reason is recorded in issue history
 
-```bash
-git clone <repo-url> issue-dashboard
-cd issue-dashboard
-cp .env.example .env
+---
+
+## Architecture
+
+```
+Slack Workspace
+      │ Socket Mode (bolt)
+      ▼
+┌─────────────────────────────────────────┐
+│           FastAPI Backend (port 8000)    │
+│                                         │
+│  ┌─────────────┐  ┌──────────────────┐  │
+│  │  Slack Bot  │  │   REST API       │  │
+│  │  (bolt)     │  │  /api/*          │  │
+│  └──────┬──────┘  └────────┬─────────┘  │
+│         └────────┬─────────┘            │
+│         ┌────────▼─────────┐            │
+│         │  Service Layer   │            │
+│         │  - Issues CRUD   │            │
+│         │  - Assignment    │            │
+│         │  - AI / RCA      │            │
+│         │  - Reminders     │            │
+│         │  - Notifications │            │
+│         └────────┬─────────┘            │
+│                  │ asyncpg              │
+│         ┌────────▼─────────┐            │
+│         │   PostgreSQL     │            │
+│         │ schema: argus    │            │
+│         │ db: atlas_driver │            │
+│         │     _offer_bpp   │            │
+│         └──────────────────┘            │
+│                                         │
+│  /assets, /  → React SPA (static)       │
+└─────────────────────────────────────────┘
 ```
 
-Edit `.env` and fill in your values:
+Single container — FastAPI serves the React SPA from `/app/static` and proxies nothing. No nginx.
 
-| Variable | Description |
+---
+
+## Stack
+
+| Layer | Tech |
 |---|---|
-| `SLACK_BOT_TOKEN` | Bot token starting with `xoxb-` from your Slack app |
-| `SLACK_APP_TOKEN` | App-level token starting with `xapp-` (for Socket Mode) |
-| `SLACK_SIGNING_SECRET` | Signing secret from the Slack app settings page |
-| `AI_API_KEY` | API key for your chosen AI provider |
-| `AI_PROVIDER` | LLM provider name (default: `claude`) |
-| `AI_MODEL` | Model identifier (default: `claude-sonnet-4-20250514`) |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 async, asyncpg |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, react-query |
+| Database | PostgreSQL (shared `atlas_driver_offer_bpp`, schema `argus`) |
+| AI / RCA | Vishwakarma via SSE streaming |
+| Slack | slack-bolt, Socket Mode (no public URL needed) |
+| Auth | Google OAuth 2.0 + JWT |
+| Scheduler | APScheduler (reminder service) |
+| Container | Single Docker image, EKS SPOT nodes |
 
-### 2. Start with Docker Compose
+---
 
-```bash
-docker-compose up -d
-```
-
-This starts three services:
-
-- **db** -- PostgreSQL 16 on port 5432
-- **backend** -- FastAPI server on port 8000 (runs migrations automatically on startup)
-- **frontend** -- Vite/React dev server on port 3000
-
-### 3. Access the dashboard
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-The API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI) and [http://localhost:8000/redoc](http://localhost:8000/redoc) (ReDoc).
-
-### 4. Set up the Slack bot
-
-1. Go to [https://api.slack.com/apps](https://api.slack.com/apps) and create a new app from scratch.
-2. Under **Socket Mode**, enable it and generate an app-level token with the `connections:write` scope. Copy this as `SLACK_APP_TOKEN`.
-3. Under **OAuth & Permissions**, add the following bot token scopes:
-   - `chat:write` -- Send messages
-   - `chat:write.public` -- Send messages to channels the bot is not a member of
-   - `commands` -- Register slash commands
-   - `channels:history` -- Read messages in public channels
-   - `groups:history` -- Read messages in private channels
-   - `im:history` -- Read direct messages
-   - `users:read` -- Look up user info
-   - `reactions:read` -- Read message reactions
-4. Install the app to your workspace and copy the **Bot User OAuth Token** as `SLACK_BOT_TOKEN`.
-5. Copy the **Signing Secret** from the app's Basic Information page as `SLACK_SIGNING_SECRET`.
-6. Invite the bot to the channels where you want to track issues.
-
-## Development
+## Local Development
 
 ### Backend
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Start just the database
-docker-compose up db -d
+cp .env.example .env   # fill in secrets
 
-# Run migrations
-alembic upgrade head
-
-# Start the dev server
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -93,138 +92,118 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev   # runs on :5173, proxies /api → localhost:8000
 ```
 
-The frontend dev server runs on port 3000 and proxies API requests to `http://localhost:8000`.
+> The frontend dev server proxies `/api/*` to `http://localhost:8000` via `vite.config.ts`.
 
-### Database only
+### Database
 
-If you only need PostgreSQL (e.g., when running backend and frontend locally):
+Schema is **not managed by Alembic migrations** — it's set up once manually:
 
 ```bash
-docker-compose up db -d
+psql "postgresql://cloud_admin:...@<host>:5432/atlas_driver_offer_bpp" \
+  -f prodk8s/init.sql
 ```
 
-### Running migrations
+---
 
-```bash
-cd backend
-alembic upgrade head       # Apply all pending migrations
-alembic revision --autogenerate -m "description"  # Generate a new migration
-```
+## Environment Variables
 
-## Architecture
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://user:pass@host:5432/db` |
+| `DB_SCHEMA` | PostgreSQL schema (default: `argus`) |
+| `DB_USER` | DB user (for reference only) |
+| `DB_NAME` | DB name (for reference only) |
+| `SLACK_BOT_TOKEN` | `xoxb-...` bot OAuth token |
+| `SLACK_APP_TOKEN` | `xapp-...` app-level token (Socket Mode) |
+| `SLACK_SIGNING_SECRET` | From Slack app Basic Information page |
+| `AI_PROVIDER` | `openai` (uses LiteLLM routing) |
+| `AI_MODEL` | e.g. `openai/open-large` |
+| `AI_FAST_MODEL` | Fast model for quick operations |
+| `AI_API_BASE` | Custom AI API base URL (e.g. internal grid) |
+| `AI_API_KEY` | API key for AI provider |
+| `AI_MAX_TOKENS` | Max tokens per AI response |
+| `AI_TEMPERATURE` | AI temperature (default: `0.1`) |
+| `VISHWAKARMA_URL` | RCA service URL |
+| `VISHWAKARMA_API_KEY` | RCA service API key |
+| `VISHWAKARMA_TIMEOUT` | SSE stream timeout in seconds |
+| `APP_BASE_URL` | Public URL used in Slack deep-links |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+| `ADMIN_EMAILS` | Comma-separated emails with admin access |
+| `ALLOWED_EMAIL_DOMAIN` | Restrict login to this domain (e.g. `nammayatri.in`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth app client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth app client secret |
+| `GOOGLE_REDIRECT_URI` | OAuth callback URL |
+| `JWT_SECRET` | Secret for signing JWTs — **rotate before production** |
+| `JWT_EXPIRY_HOURS` | JWT lifetime (default: `720` = 30 days) |
+| `DEFAULT_REMINDER_FREQUENCY_MINUTES` | Default reminder interval per team |
 
-```
-                  +-------------------+
-                  |   Slack Workspace |
-                  +--------+----------+
-                           |
-                   Socket Mode / Events
-                           |
-         +-----------------v-----------------+
-         |          FastAPI Backend           |
-         |                                   |
-         |  +-------------+  +------------+  |
-         |  | Slack Bot   |  | REST API   |  |
-         |  | (bolt)      |  | (routes)   |  |
-         |  +------+------+  +-----+------+  |
-         |         |               |          |
-         |  +------v---------------v------+   |
-         |  |     Service Layer           |   |
-         |  |  - Issue CRUD               |   |
-         |  |  - Team management          |   |
-         |  |  - AI categorization        |   |
-         |  |  - Reminder scheduler       |   |
-         |  +-------------+---------------+   |
-         |                |                   |
-         +----------------+-------------------+
-                          |
-              +-----------v-----------+
-              |     PostgreSQL 16     |
-              |   (issue_dashboard)   |
-              +-----------------------+
+---
 
-         +---------------------------------+
-         |        React Frontend           |
-         |  (Vite + TypeScript)            |
-         |  - Dashboard view               |
-         |  - Issue list & detail          |
-         |  - Team management              |
-         +---------------------------------+
-```
-
-### Key components
-
-- **FastAPI Backend** -- Async Python web framework handling REST API and Slack events.
-- **Slack Bolt** -- Slack SDK for receiving events via Socket Mode (no public URL needed for development).
-- **LiteLLM** -- Unified interface to call Claude, GPT, or other LLM providers for issue categorization and RCA.
-- **APScheduler** -- Background scheduler for sending periodic reminders on unresolved issues.
-- **SQLAlchemy 2.0** -- Async ORM with PostgreSQL via asyncpg.
-- **Alembic** -- Database migration management.
-- **React + Vite** -- Frontend single-page application.
-
-## API Endpoints
+## API Reference
 
 ### Issues
-
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/issues` | List issues (filterable by status, team, assignee; paginated) |
-| `POST` | `/api/issues` | Create a new issue |
-| `GET` | `/api/issues/{id}` | Get issue details |
-| `PUT` | `/api/issues/{id}` | Update an issue (status, priority, assignment, etc.) |
-| `DELETE` | `/api/issues/{id}` | Delete an issue |
-| `GET` | `/api/issues/{id}/history` | Get audit history for an issue |
+| `GET` | `/api/issues` | List issues (filter: status, team, assignee, priority) |
+| `POST` | `/api/issues` | Create issue |
+| `GET` | `/api/issues/{id}` | Issue detail with history |
+| `PATCH` | `/api/issues/{id}` | Update (status, assignment, priority, etc.) |
+| `DELETE` | `/api/issues/{id}` | Delete issue |
+| `POST` | `/api/issues/{id}/resolve` | Resolve with reason |
+| `GET` | `/api/issues/{id}/rca/stream` | Stream AI RCA (SSE) |
 
 ### Teams
-
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/teams` | List all teams |
-| `POST` | `/api/teams` | Create a new team |
-| `GET` | `/api/teams/{id}` | Get team details with members |
-| `PUT` | `/api/teams/{id}` | Update team settings |
-| `DELETE` | `/api/teams/{id}` | Delete a team |
+| `GET` | `/api/teams` | List teams |
+| `POST` | `/api/teams` | Create team (admin only) |
+| `GET` | `/api/teams/{id}` | Team with members |
+| `PATCH` | `/api/teams/{id}` | Update settings |
+| `DELETE` | `/api/teams/{id}` | Delete team (admin only) |
 
-### Team Members
-
+### Members
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/teams/{id}/members` | Add a member to a team |
-| `PUT` | `/api/teams/{id}/members/{member_id}` | Update member settings |
-| `DELETE` | `/api/teams/{id}/members/{member_id}` | Remove a member from a team |
+| `GET` | `/api/teams/{id}/members` | List members |
+| `POST` | `/api/teams/{id}/members` | Add member |
+| `PATCH` | `/api/members/{id}` | Update member (role, active, mute) |
+| `DELETE` | `/api/members/{id}` | Remove member |
 
-### Dashboard
-
+### Auth
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/dashboard/stats` | Aggregate statistics (open, in-progress, resolved, critical counts, avg resolution time) |
-| `GET` | `/api/dashboard/team-stats` | Per-team breakdown of issue counts and resolution metrics |
+| `GET` | `/auth/login` | Redirect to Google OAuth |
+| `GET` | `/auth/callback` | OAuth callback → JWT |
+| `GET` | `/api/auth/me` | Current user info |
 
-### Slack
-
+### Other
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/slack/events` | Slack event subscription endpoint |
-| `POST` | `/api/slack/commands` | Slash command handler |
+| `GET` | `/api/health` | Health check (DB ping) |
+| `GET` | `/api/dashboard/stats` | Aggregate stats |
+| `GET` | `/api/dashboard/team-stats` | Per-team stats |
 
-## Configuration Reference
+---
 
-All configuration is via environment variables (or `.env` file).
+## Team Roles
 
-| Variable | Default | Description |
+| Role | Assigned issues | Slack DMs |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/issue_dashboard` | PostgreSQL connection string (must use `asyncpg` driver) |
-| `SLACK_BOT_TOKEN` | (empty) | Slack bot user OAuth token (`xoxb-...`) |
-| `SLACK_APP_TOKEN` | (empty) | Slack app-level token for Socket Mode (`xapp-...`) |
-| `SLACK_SIGNING_SECRET` | (empty) | Slack request signing secret |
-| `AI_PROVIDER` | `claude` | LiteLLM provider name (`claude`, `openai`, `azure`, etc.) |
-| `AI_MODEL` | `claude-sonnet-4-20250514` | Model identifier passed to LiteLLM |
-| `AI_API_KEY` | (empty) | API key for the chosen AI provider |
-| `APP_BASE_URL` | `http://localhost:8000` | Public base URL of the backend (used in Slack messages for links) |
-| `DEFAULT_REMINDER_FREQUENCY_MINUTES` | `120` | Default interval between reminders for unresolved issues |
-| `CORS_ORIGINS` | `["http://localhost:3000"]` | Allowed CORS origins (JSON list) |
-| `HOST` | `0.0.0.0` | Backend listen address |
-| `PORT` | `8000` | Backend listen port |
+| `worker` | ✓ Can be assigned | On assignment to them |
+| `leader` | ✗ Never assigned | On every assignment/reassignment in the team |
+
+Toggle via the team member card in the dashboard (admin only).
+
+---
+
+## Deployment
+
+See **[`prodk8s/DEPLOY.md`](prodk8s/DEPLOY.md)** for the full production deployment guide including:
+- Building and pushing Docker images
+- `kubectl` deploy commands
+- Port-forward setup for local testing against prod k8s
+- Secret rotation
+- Current image version history
