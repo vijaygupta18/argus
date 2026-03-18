@@ -408,7 +408,7 @@ export default function IssuesPage() {
   const priorityFilter = (searchParams.get('priority') as IssuePriority) || '';
   const searchQuery = searchParams.get('search') || '';
   const mineFilter = searchParams.get('mine') === 'true';
-  const page = parseInt(searchParams.get('page') || '1', 10);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const perPage = 20;
 
   const [localSearch, setLocalSearch] = useState(searchQuery);

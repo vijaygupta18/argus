@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Shield, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,8 +8,12 @@ export default function GoogleCallbackPage() {
   const [searchParams] = useSearchParams();
   const { loginWithGoogleCode } = useAuth();
   const [error, setError] = useState('');
+  const calledRef = useRef(false);
 
   useEffect(() => {
+    if (calledRef.current) return;
+    calledRef.current = true;
+
     const code = searchParams.get('code');
     if (!code) {
       setError('No authorization code received from Google');

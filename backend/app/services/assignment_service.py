@@ -31,8 +31,8 @@ async def assign_issue(db: AsyncSession, team_id: uuid.UUID) -> TeamMember | Non
         logger.warning(f"No active members found for team {team_id}")
         return None
 
-    member.open_issue_count += 1
-    member.total_assigned_count += 1
+    member.open_issue_count = TeamMember.open_issue_count + 1
+    member.total_assigned_count = TeamMember.total_assigned_count + 1
     await db.flush()
 
     logger.info(

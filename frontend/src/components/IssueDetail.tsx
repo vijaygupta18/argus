@@ -351,7 +351,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
               )}
 
               {/* Root Causes */}
-              {data?.root_causes?.length > 0 && (
+              {Array.isArray(data?.root_causes) && data.root_causes.length > 0 && (
                 <div className="animate-rca-reveal" style={{ animationDelay: '80ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
@@ -378,7 +378,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
               )}
 
               {/* Investigation Steps */}
-              {data?.investigation_steps?.length > 0 && (
+              {Array.isArray(data?.investigation_steps) && data.investigation_steps.length > 0 && (
                 <div className="animate-rca-reveal" style={{ animationDelay: '160ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <SearchIcon className="w-3.5 h-3.5 text-slate-500" />
@@ -398,7 +398,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
               )}
 
               {/* Suggested Fixes */}
-              {data?.suggested_fixes?.length > 0 && (
+              {Array.isArray(data?.suggested_fixes) && data.suggested_fixes.length > 0 && (
                 <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60 animate-rca-reveal" style={{ animationDelay: '240ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
@@ -416,7 +416,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
               )}
 
               {/* Related Systems */}
-              {data?.related_systems?.length > 0 && (
+              {Array.isArray(data?.related_systems) && data.related_systems.length > 0 && (
                 <div className="animate-rca-reveal" style={{ animationDelay: '320ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Layers className="w-3.5 h-3.5 text-slate-500" />
@@ -664,6 +664,8 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 3000;
+      // If issue is resolved/closed and RCA is null, stop polling — it won't generate
+      if (!data.ai_rca && (data.status === 'resolved' || data.status === 'closed')) return false;
       if (!data.ai_rca) return 3000;
       const rca = data.ai_rca as Record<string, unknown>;
       if (rca?.status === 'investigating') return 3000;

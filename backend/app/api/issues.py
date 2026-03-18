@@ -89,8 +89,8 @@ async def _is_issue_assigned_to_user(issue: Issue, user: UserContext, db: AsyncS
         # Match by slack_user_id only when both are non-empty (avoids None == None false match)
         if user.slack_user_id and a.get("slack_user_id") and a.get("slack_user_id") == user.slack_user_id:
             return True
-        # Name fallback for users without Slack ID
-        if a.get("name") and user.name and a.get("name") == user.name:
+        # Match by email
+        if user.email and a.get("email") and a.get("email") == user.email:
             return True
     return False
 
@@ -233,12 +233,20 @@ async def get_issue(
         async with async_session_maker() as guard_session:
             result = await guard_session.execute(
                 update(Issue)
-                .where(Issue.id == issue.id, or_(Issue.ai_rca.is_(None), cast(Issue.ai_rca, Text) == "null"))
+                .where(
+                    Issue.id == issue.id,
+                    or_(
+                        Issue.ai_rca.is_(None),
+                        cast(Issue.ai_rca, Text) == "null",
+                        cast(Issue.ai_rca, Text).contains('"status": "investigating"'),
+                    ),
+                )
                 .values(ai_rca={"status": "investigating"})
             )
+            won_race = result.rowcount == 1  # capture BEFORE session closes
             await guard_session.commit()
         # Only spawn background task if we won the race (rowcount == 1)
-        if result.rowcount == 1:
+        if won_race:
             team_name = issue.team.name if issue.team else "Unknown"
             task = asyncio.create_task(_generate_rca_background(
                 issue.id, issue.title, issue.description, issue.category or "other", team_name
@@ -595,6 +603,10 @@ async def resolve_issue(
     old_issue = await issue_service.get_issue_with_details(db, issue_id)
     if old_issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Guard: reject if already resolved or closed
+    if old_issue.status in ("resolved", "closed"):
+        raise HTTPException(status_code=400, detail="Issue is already resolved/closed")
 
     # Permission check
     if not user.is_admin:

@@ -225,7 +225,7 @@ function RecentIssueCard({ issue, staggerDelay = 0 }: { issue: Issue; staggerDel
       <div className="flex items-start gap-3">
         {/* Status dot */}
         <div className="mt-1.5 shrink-0">
-          <div className={`w-2.5 h-2.5 rounded-full ${statusColors[issue.status].dot}`} />
+          <div className={`w-2.5 h-2.5 rounded-full ${(statusColors[issue.status] || statusColors['open']).dot}`} />
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-medium text-slate-900 truncate group-hover:text-blue-600 transition-colors">
