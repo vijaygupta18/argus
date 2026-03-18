@@ -151,11 +151,11 @@ def register_handlers(app):
                             ai_categorization, ai_provider_used, created_at, updated_at
                         ) VALUES (
                             :id, :title, :description, 'open', :priority, :category,
-                            :team_id, :assigned_to, :assignees::jsonb,
+                            :team_id, :assigned_to, CAST(:assignees AS jsonb),
                             :reported_by_slack_id, :reported_by_name,
                             :reported_by_email, :slack_channel_id, :slack_channel_name,
                             :slack_thread_ts, :slack_message_ts,
-                            :ai_categorization::jsonb, :ai_provider_used, :now, :now
+                            CAST(:ai_categorization AS jsonb), :ai_provider_used, :now, :now
                         )
                     """),
                     {
