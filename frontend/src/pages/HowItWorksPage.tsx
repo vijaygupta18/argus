@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import SlackFlowAnimation from '../components/SlackFlowAnimation';
 import DashboardFlowAnimation from '../components/DashboardFlowAnimation';
 import RCAFlowAnimation from '../components/RCAFlowAnimation';
@@ -515,6 +516,8 @@ const steps: Omit<FlowStep, 'visual'>[] = [
 ];
 
 export default function HowItWorksPage() {
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroVisible, setHeroVisible] = useState(false);
 
@@ -529,9 +532,9 @@ export default function HowItWorksPage() {
       {/* Sticky header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200/60">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/login" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
+          <Link to={isLoggedIn ? "/" : "/login"} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">Back to Login</span>
+            <span className="text-sm font-medium">{isLoggedIn ? "Go to Dashboard" : "Back to Login"}</span>
           </Link>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
@@ -540,10 +543,10 @@ export default function HowItWorksPage() {
             <span className="text-sm font-bold text-slate-900">Argus</span>
           </div>
           <Link
-            to="/login"
+            to={isLoggedIn ? "/" : "/login"}
             className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
           >
-            Sign In
+            {isLoggedIn ? "Dashboard" : "Sign In"}
             <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -605,13 +608,13 @@ export default function HowItWorksPage() {
       {/* ============== FOOTER CTA ============== */}
       <section className="py-20 px-4 text-center">
         <div className="max-w-md mx-auto">
-          <h2 className="text-2xl font-bold text-slate-900">Ready to get started?</h2>
-          <p className="text-slate-500 mt-2 text-sm">Sign in with your Google workspace account and start tracking issues.</p>
+          <h2 className="text-2xl font-bold text-slate-900">{isLoggedIn ? "You're all set!" : "Ready to get started?"}</h2>
+          <p className="text-slate-500 mt-2 text-sm">{isLoggedIn ? "Head to your dashboard to start tracking and resolving issues." : "Sign in with your Google workspace account and start tracking issues."}</p>
           <Link
-            to="/login"
+            to={isLoggedIn ? "/" : "/login"}
             className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all"
           >
-            Sign In to Argus
+            {isLoggedIn ? "Go to Dashboard" : "Sign In to Argus"}
             <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
