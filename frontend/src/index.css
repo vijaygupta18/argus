@@ -129,6 +129,119 @@ body {
 .animate-fade-up-4 { animation: fade-up 0.4s ease-out 0.2s both; }
 .animate-fade-up-5 { animation: fade-up 0.4s ease-out 0.25s both; }
 
+/* Scale-in animation for filter chips */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out both;
+}
+
+/* Slide-down for filter bar on mount */
+@keyframes slide-down-bar {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down-bar 0.3s ease-out both;
+}
+
+/* Smooth description expand/collapse */
+.description-smooth {
+  transition: max-height 0.35s ease-in-out;
+  overflow: hidden;
+}
+
+.description-smooth.is-collapsed {
+  max-height: 4.5em;
+}
+
+.description-smooth.is-expanded {
+  max-height: 2000px;
+}
+
+/* RCA section stagger reveal */
+@keyframes rca-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rca-reveal {
+  opacity: 0;
+  animation: rca-reveal 0.35s ease-out forwards;
+}
+
+/* Staggered card entrance — opacity + slide-up, delay set via inline style */
+@keyframes stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-stagger-in {
+  opacity: 0;
+  animation: stagger-in 0.4s ease-out forwards;
+}
+
+/* Slide up from bottom (for team stats) */
+@keyframes slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up-in {
+  opacity: 0;
+  animation: slide-up-in 0.45s ease-out forwards;
+}
+
+/* Section header subtle fade */
+@keyframes section-fade {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-section-fade {
+  animation: section-fade 0.35s ease-out both;
+}
+
 /* Global scrollbar styling */
 * {
   scrollbar-width: thin;
@@ -169,6 +282,67 @@ body {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgb(148 163 184 / 0.6);
+}
+
+/* Smooth expand/collapse via max-height */
+.expand-section {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease-in-out, opacity 0.25s ease-in-out;
+  opacity: 0;
+}
+
+.expand-section.expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+/* Subtle badge pulse when value changes */
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 0.4s ease-in-out;
+}
+
+/* Fade-in for user section on mount */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+/* Role badge transition glow */
+@keyframes role-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  }
+}
+
+.role-badge-transition {
+  transition: all 0.3s ease;
+}
+
+.role-badge-transition:active {
+  animation: role-pulse 0.5s ease-in-out;
 }
 
 /* Selection color */

@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   ChevronDown,
-  ChevronUp,
   Trash2,
   UserPlus,
   Bell,
@@ -689,7 +688,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                 <p className="text-sm text-slate-500 mb-3">{team.description}</p>
               )}
               {/* Visual stats row */}
-              <div className="flex items-center gap-5 mt-3">
+              <div className="flex items-center gap-5 mt-3 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
                 <div className="flex items-center gap-2">
                   {memberNames.length > 0 ? (
                     <AvatarStack names={memberNames} max={3} size="xs" />
@@ -760,15 +759,11 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
               </span>
             )}
           </span>
-          {expanded ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          )}
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} />
         </button>
 
         {/* Members section */}
-        {expanded && (
+        <div className={`expand-section ${expanded ? 'expanded' : ''}`}>
           <div className="border-t border-slate-100 px-5 py-4">
             {membersLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -778,12 +773,13 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
               <>
                 {members && members.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {members.map((member) => (
+                    {members.map((member, memberIdx) => (
                       <div
                         key={member.id}
                         className={`bg-slate-50/80 rounded-xl p-3.5 border border-slate-100 transition-all duration-150 hover:border-slate-200 ${
                           !member.is_active ? 'opacity-60' : ''
-                        }`}
+                        } ${expanded ? 'animate-fade-up' : ''}`}
+                        style={expanded ? { animationDelay: `${memberIdx * 60}ms` } : undefined}
                       >
                         <div className="flex items-start gap-3">
                           <Avatar
@@ -801,7 +797,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                               {member.role === 'leader' ? (
                                 <span
                                   onClick={() => isAdmin ? toggleMemberRole.mutate({ memberId: member.id, role: 'worker' }) : undefined}
-                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 ${isAdmin ? 'cursor-pointer hover:bg-violet-200' : ''}`}
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 role-badge-transition ${isAdmin ? 'cursor-pointer hover:bg-violet-200' : ''}`}
                                   title={isAdmin ? 'Click to set as Worker' : 'Leader'}
                                 >
                                   Leader
@@ -810,7 +806,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                                 isAdmin && (
                                   <span
                                     onClick={() => toggleMemberRole.mutate({ memberId: member.id, role: 'leader' })}
-                                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 cursor-pointer hover:bg-violet-100 hover:text-violet-700"
+                                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 cursor-pointer hover:bg-violet-100 hover:text-violet-700 role-badge-transition"
                                     title="Click to set as Leader"
                                   >
                                     Worker
@@ -896,7 +892,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                 {canManage && (
                   <button
                     onClick={() => setShowAddMember(true)}
-                    className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 mt-4 px-3 py-2 rounded-xl hover:bg-blue-50 transition-colors w-full justify-center border border-dashed border-slate-200 hover:border-blue-300"
+                    className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 mt-4 px-3 py-2 rounded-xl hover:bg-blue-50 transition-all duration-200 w-full justify-center border border-dashed border-slate-200 hover:border-blue-300 hover:scale-[1.02]"
                   >
                     <UserPlus className="w-4 h-4" />
                     Add Member
@@ -905,7 +901,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
               </>
             )}
           </div>
-        )}
+        </div>
 
         <ConfirmDialog
           open={showDeleteTeamConfirm}
@@ -1011,7 +1007,7 @@ export default function TeamManager() {
         {isAdmin && (
           <button
             onClick={() => setShowAddTeam(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.02]"
           >
             <Plus className="w-4 h-4" />
             Add Team
@@ -1024,7 +1020,9 @@ export default function TeamManager() {
       {teamCount > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {teams?.map((team, index) => (
-            <TeamCard key={team.id} team={team} index={index} />
+            <div key={team.id} className="animate-stagger-in" style={{ animationDelay: `${index * 80}ms` }}>
+              <TeamCard team={team} index={index} />
+            </div>
           ))}
         </div>
       ) : (
@@ -1039,7 +1037,7 @@ export default function TeamManager() {
           {isAdmin && (
             <button
               onClick={() => setShowAddTeam(true)}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:scale-[1.02]"
             >
               <Plus className="w-4 h-4" />
               Create your first team

@@ -346,21 +346,21 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
         <div className="border-t border-slate-100">
           {/* Vishwakarma: render full markdown report */}
           {isVishwakarma && data?.full_report ? (
-            <div className="px-5 py-4">
+            <div className="px-5 py-4 animate-rca-reveal">
               <RCAMarkdown content={String(data.full_report)} />
             </div>
           ) : (
             <div className="px-5 pb-5 pt-4 space-y-5">
               {/* Summary */}
               {data?.summary && (
-                <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50">
+                <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50 animate-rca-reveal" style={{ animationDelay: '0ms' }}>
                   <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
                 </div>
               )}
 
               {/* Root Causes */}
               {data?.root_causes?.length > 0 && (
-                <div>
+                <div className="animate-rca-reveal" style={{ animationDelay: '80ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
                     <h4 className="text-sm font-semibold text-slate-800">Root Causes</h4>
@@ -387,7 +387,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
 
               {/* Investigation Steps */}
               {data?.investigation_steps?.length > 0 && (
-                <div>
+                <div className="animate-rca-reveal" style={{ animationDelay: '160ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <SearchIcon className="w-3.5 h-3.5 text-slate-500" />
                     <h4 className="text-sm font-semibold text-slate-800">Investigation Steps</h4>
@@ -407,7 +407,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
 
               {/* Suggested Fixes */}
               {data?.suggested_fixes?.length > 0 && (
-                <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60">
+                <div className="bg-emerald-50/60 rounded-lg p-4 border border-emerald-100/60 animate-rca-reveal" style={{ animationDelay: '240ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
                     <h4 className="text-sm font-semibold text-emerald-800">Suggested Fixes</h4>
@@ -425,7 +425,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
 
               {/* Related Systems */}
               {data?.related_systems?.length > 0 && (
-                <div>
+                <div className="animate-rca-reveal" style={{ animationDelay: '320ms' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Layers className="w-3.5 h-3.5 text-slate-500" />
                     <h4 className="text-sm font-semibold text-slate-800">Related Systems</h4>
@@ -506,7 +506,7 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
   return (
     <div className="space-y-0">
       {visibleHistory.map((entry, idx) => (
-        <div key={entry.id} className="flex gap-3">
+        <div key={entry.id} className="flex gap-3 animate-stagger-in" style={{ animationDelay: `${idx * 50}ms` }}>
           {/* Timeline line */}
           <div className="flex flex-col items-center">
             <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-4 ${getHistoryDotColor(entry.action)}`}>
@@ -575,7 +575,8 @@ function DescriptionSection({ issue }: { issue: Issue }) {
 
   useEffect(() => {
     if (descRef.current) {
-      setNeedsExpand(descRef.current.scrollHeight > descRef.current.clientHeight + 2);
+      // 4.5em collapsed height ~ 72px at default font-size
+      setNeedsExpand(descRef.current.scrollHeight > 72);
     }
   }, [issue.description]);
 
@@ -585,14 +586,16 @@ function DescriptionSection({ issue }: { issue: Issue }) {
         <MessageSquare className="w-4 h-4 text-slate-400" />
         <h3 className="text-sm font-semibold text-slate-900">Description</h3>
       </div>
-      <p
-        ref={descRef}
-        className={`text-sm text-slate-700 leading-relaxed whitespace-pre-wrap ${
-          !isExpanded ? 'description-clamp' : ''
-        }`}
+      <div
+        className={`description-smooth ${isExpanded ? 'is-expanded' : 'is-collapsed'}`}
       >
-        {issue.description || 'No description provided'}
-      </p>
+        <p
+          ref={descRef}
+          className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"
+        >
+          {issue.description || 'No description provided'}
+        </p>
+      </div>
       {needsExpand && (
         <button
           onClick={() => setIsExpanded(!isExpanded)}
@@ -830,7 +833,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               <button
                 onClick={() => { setStatusMenuOpen(!statusMenuOpen); setAssignMenuOpen(false); setTeamMenuOpen(false); }}
                 disabled={updateMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
               >
                 {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 text-slate-500" />}
                 {updateMutation.isPending ? 'Updating...' : 'Status'}
@@ -868,7 +871,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                 <button
                   onClick={() => { setTeamMenuOpen(!teamMenuOpen); setStatusMenuOpen(false); setAssignMenuOpen(false); }}
                   disabled={teamChangeMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
                 >
                   {teamChangeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />}
                   {teamChangeMutation.isPending ? 'Moving...' : 'Team'}
@@ -906,7 +909,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                     setSelectedAssignees(current);
                   }}
                   disabled={assignMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
                 >
                   {assignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5 text-slate-500" />}
                   {assignMutation.isPending ? 'Assigning...' : 'Assign'}
@@ -1028,7 +1031,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
           {/* Team */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '0ms' }}>
             <div className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Team</span>
@@ -1046,7 +1049,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Channel */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '50ms' }}>
             <div className="flex items-center gap-1.5">
               <Hash className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Channel</span>
@@ -1069,7 +1072,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Assigned to */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '100ms' }}>
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Assigned to</span>
@@ -1088,7 +1091,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Reported by */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '150ms' }}>
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Reported by</span>
@@ -1099,7 +1102,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Created */}
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between animate-stagger-in" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Created</span>
@@ -1109,7 +1112,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
           {/* Resolved at (if applicable) */}
           {issue.resolved_at && (
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between animate-stagger-in" style={{ animationDelay: '250ms' }}>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                 <span className="text-sm text-slate-500">Resolved</span>

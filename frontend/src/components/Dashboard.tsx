@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -25,6 +26,38 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
+
+/** Animate a number from 0 to `target` over `duration` ms. */
+function useCountUp(target: number, duration = 500): number {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number>(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (target === 0) {
+      setValue(0);
+      return;
+    }
+    startRef.current = null;
+
+    const step = (ts: number) => {
+      if (startRef.current === null) startRef.current = ts;
+      const elapsed = ts - startRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out quad
+      const eased = 1 - (1 - progress) * (1 - progress);
+      setValue(Math.round(eased * target));
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+
+  return value;
+}
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -63,17 +96,26 @@ interface StatCardProps {
   sparkMax: number;
   trend?: { delta: number; direction: 'up' | 'down' | 'flat' };
   animClass?: string;
+  staggerDelay?: number;
 }
 
-function StatCard({ label, value, icon, iconBg, sparkColor, sparkValue, sparkMax, trend, animClass = '' }: StatCardProps) {
+function AnimatedNumber({ value }: { value: number }) {
+  const displayed = useCountUp(value);
+  return <>{formatNumber(displayed)}</>;
+}
+
+function StatCard({ label, value, icon, iconBg, sparkColor, sparkValue, sparkMax, trend, animClass = '', staggerDelay = 0 }: StatCardProps) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200/60 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group ${animClass}`}>
+    <div
+      className={`bg-white rounded-2xl border border-slate-200/60 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group animate-stagger-in ${animClass}`}
+      style={{ animationDelay: `${staggerDelay}ms` }}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-[13px] text-slate-500 font-medium">{label}</p>
           <div className="flex items-baseline gap-2 mt-1.5">
             <p className="text-2xl font-bold text-slate-900 tracking-tight">
-              {typeof value === 'number' ? formatNumber(value) : value}
+              {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
             </p>
             {trend && trend.direction !== 'flat' && (
               <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
@@ -129,7 +171,8 @@ function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
         return (
           <div
             key={ts.team_id}
-            className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 animate-slide-up-in"
+            style={{ animationDelay: `${i * 80}ms` }}
           >
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -166,13 +209,14 @@ function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
   );
 }
 
-function RecentIssueCard({ issue }: { issue: Issue }) {
+function RecentIssueCard({ issue, staggerDelay = 0 }: { issue: Issue; staggerDelay?: number }) {
   const navigate = useNavigate();
 
   return (
     <div
       onClick={() => navigate(`/issues/${issue.id}`)}
-      className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group relative"
+      className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group relative animate-stagger-in"
+      style={{ animationDelay: `${staggerDelay}ms` }}
     >
       <div className="flex items-start gap-3">
         {/* Status dot */}
@@ -248,11 +292,12 @@ function ActivityFeed() {
 
   return (
     <div className="divide-y divide-slate-100">
-      {latest.map((entry) => (
+      {latest.map((entry, i) => (
         <Link
           key={entry.id}
           to={`/issues/${entry.issue_id}`}
-          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors animate-stagger-in"
+          style={{ animationDelay: `${i * 60}ms` }}
         >
           <div className="mt-1 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
             <Activity className="w-3 h-3 text-slate-400" />
@@ -435,7 +480,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stat Cards - Primary Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-up-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard
               label="Total Issues"
               value={stats?.total_issues ?? 0}
@@ -445,6 +490,7 @@ export default function Dashboard() {
               sparkColor="bg-slate-400"
               sparkValue={stats?.total_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
+              staggerDelay={0}
             />
             <StatCard
               label="Open"
@@ -455,6 +501,7 @@ export default function Dashboard() {
               sparkColor="bg-blue-500"
               sparkValue={stats?.open_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
+              staggerDelay={50}
             />
             <StatCard
               label="In Progress"
@@ -465,11 +512,12 @@ export default function Dashboard() {
               sparkColor="bg-amber-500"
               sparkValue={stats?.in_progress_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
+              staggerDelay={100}
             />
           </div>
 
           {/* Stat Cards - Secondary Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-up-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard
               label="Resolved"
               value={stats?.resolved_issues ?? 0}
@@ -479,6 +527,7 @@ export default function Dashboard() {
               sparkColor="bg-emerald-500"
               sparkValue={stats?.resolved_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
+              staggerDelay={150}
             />
             <StatCard
               label="Critical"
@@ -489,6 +538,7 @@ export default function Dashboard() {
               sparkColor="bg-red-500"
               sparkValue={stats?.critical_issues ?? 0}
               sparkMax={stats?.total_issues ?? 1}
+              staggerDelay={200}
             />
             <StatCard
               label="Avg Resolution"
@@ -499,6 +549,7 @@ export default function Dashboard() {
               sparkColor="bg-violet-500"
               sparkValue={Math.min(stats?.avg_resolution_hours ?? 0, 100)}
               sparkMax={100}
+              staggerDelay={250}
             />
           </div>
 
@@ -506,7 +557,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-up-4">
             {/* Team Stats */}
             <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 animate-section-fade">
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                   <Users className="w-4 h-4 text-slate-400" />
                   Team Performance
@@ -530,13 +581,13 @@ export default function Dashboard() {
 
             {/* Activity Feed */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '100ms' }}>
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-slate-400" />
                   Recent Activity
                 </h2>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden">
+              <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden hover:shadow-md transition-all duration-200">
                 <ActivityFeed />
               </div>
             </div>
@@ -544,7 +595,7 @@ export default function Dashboard() {
 
           {/* Recent Issues */}
           <div className="animate-fade-up-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '200ms' }}>
               <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-slate-400" />
                 Recent Issues
@@ -559,8 +610,8 @@ export default function Dashboard() {
             </div>
             {recentIssues && recentIssues.items.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {recentIssues.items.slice(0, 8).map((issue) => (
-                  <RecentIssueCard key={issue.id} issue={issue} />
+                {recentIssues.items.slice(0, 8).map((issue, i) => (
+                  <RecentIssueCard key={issue.id} issue={issue} staggerDelay={i * 30} />
                 ))}
               </div>
             ) : (

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
@@ -32,6 +32,32 @@ function RoleBadge({ role }: { role: 'admin' | 'leader' | 'worker' }) {
   return (
     <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md ${colors[role]}`}>
       {role.charAt(0).toUpperCase() + role.slice(1)}
+    </span>
+  );
+}
+
+function BadgeCount({ value, isActive }: { value: number; isActive: boolean }) {
+  const prevValueRef = useRef(value);
+  const [pulse, setPulse] = useState(false);
+
+  useEffect(() => {
+    if (prevValueRef.current !== value) {
+      prevValueRef.current = value;
+      setPulse(true);
+      const timer = setTimeout(() => setPulse(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [value]);
+
+  return (
+    <span
+      className={`text-xs font-semibold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center transition-colors duration-200 ${
+        isActive
+          ? 'bg-blue-600 text-white'
+          : 'bg-slate-200 text-slate-600'
+      } ${pulse ? 'animate-badge-pulse' : ''}`}
+    >
+      {value}
     </span>
   );
 }
@@ -83,21 +109,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           >
             {({ isActive }) => (
               <>
-                {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
-                )}
-                <item.icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : ''}`} />
+                <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-0'}`} />
+                <item.icon className={`w-5 h-5 transition-colors duration-200 ${isActive ? 'text-blue-600' : ''}`} />
                 <span className="flex-1">{item.label}</span>
                 {item.badgeKey && stats && stats[item.badgeKey] > 0 && (
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {stats[item.badgeKey]}
-                  </span>
+                  <BadgeCount
+                    value={stats[item.badgeKey]}
+                    isActive={isActive}
+                  />
                 )}
               </>
             )}
@@ -107,7 +126,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* User Info */}
       {user && (
-        <div className="border-t border-slate-200/60 p-4 shrink-0">
+        <div className="border-t border-slate-200/60 p-4 shrink-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <div className="flex items-center gap-3">
             <Avatar name={user.name} size="md" />
             <div className="flex-1 min-w-0">
@@ -132,6 +151,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -157,16 +177,16 @@ export default function Layout() {
       </div>
 
       {/* Mobile Sidebar Overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      <div
+        className={`md:hidden fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-200 ${
+          mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-gradient-to-b from-slate-50 to-white border-r border-slate-200 flex flex-col transform transition-transform duration-200 ease-in-out ${
+        className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-gradient-to-b from-slate-50 to-white border-r border-slate-200 flex flex-col transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -175,7 +195,9 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto md:pt-0 pt-14">
-        <Outlet />
+        <div key={location.pathname} className="page-enter">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

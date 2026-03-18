@@ -304,7 +304,7 @@ function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full ring-1 ring-blue-100">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full ring-1 ring-blue-100 animate-scale-in">
       {label}
       <button
         onClick={onRemove}
@@ -486,7 +486,7 @@ export default function IssuesPage() {
       />
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm animate-slide-down">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <form onSubmit={handleSearchSubmit} className="flex-1 min-w-[220px]">
@@ -644,18 +644,23 @@ export default function IssuesPage() {
         <>
           {/* Issue cards */}
           <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto custom-scrollbar pr-1">
-            {data?.items.map((issue) => (
-              <IssueRow
+            {data?.items.map((issue, idx) => (
+              <div
                 key={issue.id}
-                issue={issue}
-                onClick={() => navigate(`/issues/${issue.id}`)}
-              />
+                className="animate-stagger-in"
+                style={{ animationDelay: `${idx * 30}ms` }}
+              >
+                <IssueRow
+                  issue={issue}
+                  onClick={() => navigate(`/issues/${issue.id}`)}
+                />
+              </div>
             ))}
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-slate-200 px-5 py-3 shadow-sm">
+            <div key={page} className="flex items-center justify-between mt-4 bg-white rounded-xl border border-slate-200 px-5 py-3 shadow-sm animate-fade-in-up">
               <p className="text-sm text-slate-500">
                 Showing <span className="font-medium text-slate-700">{startItem}-{endItem}</span> of{' '}
                 <span className="font-medium text-slate-700">{data?.total}</span>
