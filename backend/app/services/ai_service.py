@@ -251,6 +251,13 @@ Return JSON: {{"title": "short title", "category": "backend|infrastructure|front
                                 analysis_text = data.get("analysis") or data.get("text") or analysis_text
 
                             elif current_event in ("done", "message_stop", "stream_end"):
+                                # Vishwakarma's "done" event carries the final analysis in "content"
+                                if data.get("content") and not analysis_text:
+                                    analysis_text = data["content"]
+                                # Mark all remaining tools as done
+                                for tc in tool_calls:
+                                    if tc["status"] == "running":
+                                        tc["status"] = "done"
                                 break
 
                             elif current_event == "error":
