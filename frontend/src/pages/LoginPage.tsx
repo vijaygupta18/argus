@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Shield, Loader2, AlertCircle } from 'lucide-react';
 import { getGoogleAuthUrl } from '../api/auth';
 
@@ -79,6 +79,13 @@ export default function LoginPage() {
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
+
+          <Link
+            to="/how-it-works"
+            className="block mt-5 text-center text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
+            Learn how Argus works &rarr;
+          </Link>
         </div>
 
         <p className="text-xs text-slate-400 text-center mt-6">

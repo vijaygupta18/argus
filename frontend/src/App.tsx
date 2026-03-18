@@ -9,6 +9,7 @@ import IssueDetailPage from './pages/IssueDetailPage';
 import TeamsPage from './pages/TeamsPage';
 import LoginPage from './pages/LoginPage';
 import GoogleCallbackPage from './pages/GoogleCallbackPage';
+import HowItWorksPage from './pages/HowItWorksPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<GoogleCallbackPage />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
             <Route
               element={
                 <ProtectedRoute>

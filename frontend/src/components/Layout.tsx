@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardStats } from '../api/client';
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/issues', icon: AlertCircle, label: 'Issues', badgeKey: 'open_issues' as const },
   { to: '/teams', icon: Users, label: 'Teams' },
+  { to: '/how-it-works', icon: Sparkles, label: 'How It Works' },
 ];
 
 function RoleBadge({ role }: { role: 'admin' | 'leader' | 'worker' }) {

@@ -185,6 +185,17 @@ async def _generate_rca_background(issue_id: uuid.UUID, title: str, description:
                 logger.info(f"Background RCA generated for issue {issue_id}")
     except Exception as e:
         logger.error(f"Background RCA generation failed for {issue_id}: {e}")
+        # Reset ai_rca to NULL so next view retries
+        try:
+            async with async_session_maker() as db:
+                stmt = select(Issue).where(Issue.id == issue_id)
+                result = await db.execute(stmt)
+                issue = result.scalar_one_or_none()
+                if issue:
+                    issue.ai_rca = None
+                    await db.commit()
+        except Exception:
+            pass
 
 
 @router.get("/{issue_id}", response_model=IssueResponse)
@@ -199,8 +210,23 @@ async def get_issue(
     if issue is None:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Kick off RCA in background — only once (guard: atomic CAS via WHERE ai_rca IS NULL or JSON null)
+    # Kick off RCA in background — only once (guard: atomic CAS)
+    # Also retry if stuck in "investigating" for > 15 minutes (background task died)
+    should_generate_rca = False
     if issue.ai_rca is None and settings.ai_api_key:
+        should_generate_rca = True
+    elif isinstance(issue.ai_rca, dict) and issue.ai_rca.get("status") == "investigating" and settings.ai_api_key:
+        # Check if stuck — updated_at hasn't changed in 15 minutes
+        from datetime import datetime, timezone, timedelta
+        if issue.updated_at:
+            updated = issue.updated_at if hasattr(issue.updated_at, 'tzinfo') else datetime.fromisoformat(str(issue.updated_at))
+            if hasattr(updated, 'tzinfo') and updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - updated > timedelta(minutes=15):
+                should_generate_rca = True
+                logger.warning(f"RCA stuck in investigating for issue {issue_id}, retrying")
+
+    if should_generate_rca:
         import asyncio
         # Use a fresh session to atomically mark as investigating — avoids duplicate RCA generation
         # Must handle both SQL NULL and JSON null (asyncpg returns None for both but IS NULL is False for JSON null)

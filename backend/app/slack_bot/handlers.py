@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.database import async_session_maker
 from app.models.team import Team
+from app.models.team_member import TeamMember
 from app.services.ai_service import ai_service
 from app.services.assignment_service import assign_issue
 from app.services.issue_service import create_issue
@@ -150,6 +151,46 @@ def register_handlers(app):
                         )
                     except Exception as e:
                         logger.warning(f"Failed to DM assignee: {e}")
+
+                # 8. DM all leaders of the team
+                try:
+                    from app.slack_bot.messages import PRIORITY_COLOR, PRIORITY_EMOJI
+                    stmt = select(TeamMember).where(
+                        TeamMember.team_id == matched_team.id,
+                        TeamMember.role == "leader",
+                        TeamMember.is_active == True,
+                        TeamMember.slack_user_id != None,
+                        TeamMember.slack_user_id != "",
+                    )
+                    r = await db.execute(stmt)
+                    leaders = r.scalars().all()
+
+                    if leaders:
+                        dashboard_url = f"{settings.app_base_url}/issues/{issue.id}"
+                        p = issue.priority or "medium"
+                        assignee_name = assignee.name if assignee else "Unassigned"
+                        for leader in leaders:
+                            leader_dm = [{
+                                "color": PRIORITY_COLOR.get(p, "#6B7280"),
+                                "blocks": [
+                                    {"type": "section", "text": {"type": "mrkdwn", "text": ":loudspeaker: *New issue assigned in your team*"}},
+                                    {"type": "section", "text": {"type": "mrkdwn", "text": f">{issue.title}"}},
+                                    {"type": "section", "fields": [
+                                        {"type": "mrkdwn", "text": f"*Assigned to:* {assignee_name}"},
+                                        {"type": "mrkdwn", "text": f"*Priority:* {PRIORITY_EMOJI.get(p, '')} {p.title()}"},
+                                        {"type": "mrkdwn", "text": f"*Channel:* #{channel_name}"},
+                                        {"type": "mrkdwn", "text": f"*Reported by:* <@{user_id}>"},
+                                    ]},
+                                    {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard>"}]},
+                                ],
+                            }]
+                            await slack_service.post_dm(
+                                user_id=leader.slack_user_id,
+                                text=f"New issue in your team: {issue.title}",
+                                attachments=leader_dm,
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to DM leaders: {e}")
 
                 logger.info(
                     f"Created issue from Slack: {issue.id} - {issue.title} "

@@ -245,3 +245,64 @@ body {
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+/* ===== How It Works Page Animations ===== */
+
+/* Pulsing shield */
+@keyframes hiw-shield-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 20px 40px -8px rgba(59, 130, 246, 0.25);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 20px 50px -4px rgba(59, 130, 246, 0.35);
+  }
+}
+
+.hiw-pulse-shield {
+  animation: hiw-shield-pulse 3s ease-in-out infinite;
+}
+
+/* Timeline line grow */
+@keyframes hiw-grow-line {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.hiw-line-grow {
+  animation: hiw-grow-line 0.8s ease-out forwards;
+}
+
+/* Typewriter effect for Slack message */
+@keyframes hiw-typewriter {
+  from {
+    max-width: 0;
+  }
+  to {
+    max-width: 16ch;
+  }
+}
+
+.hiw-typewriter {
+  animation: hiw-typewriter 1.5s steps(20, end) 0.5s both;
+  border-right: 2px solid #64748b;
+  animation-fill-mode: both;
+}
+
+.hiw-typewriter {
+  animation: hiw-typewriter 1.5s steps(20, end) 0.5s both, hiw-blink-cursor 0.75s step-end 4;
+}
+
+@keyframes hiw-blink-cursor {
+  from, to {
+    border-color: transparent;
+  }
+  50% {
+    border-color: #64748b;
+  }
+}
