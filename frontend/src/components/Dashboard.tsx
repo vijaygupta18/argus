@@ -144,11 +144,15 @@ function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
   if (teamStats.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/60 p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
-          <Users className="w-7 h-7 text-slate-300" />
+        <div className="relative mx-auto mb-5 w-16 h-16">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-2xl rotate-6 opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
+          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+            <Users className="w-7 h-7 text-slate-300" />
+          </div>
         </div>
-        <p className="text-sm font-medium text-slate-500">No team data yet</p>
-        <p className="text-xs text-slate-400 mt-1">Stats appear once teams are assigned issues</p>
+        <h3 className="text-sm font-semibold text-slate-700">No team data yet</h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-[220px] mx-auto">Stats will appear once teams are assigned issues</p>
       </div>
     );
   }
@@ -283,9 +287,16 @@ function ActivityFeed() {
 
   if (!latest || latest.length === 0) {
     return (
-      <div className="py-8 text-center">
-        <Activity className="w-6 h-6 text-slate-200 mx-auto mb-2" />
-        <p className="text-xs text-slate-400">No recent activity</p>
+      <div className="text-center py-10">
+        <div className="relative mx-auto mb-4 w-14 h-14">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-2xl rotate-6 opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
+          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+            <Activity className="w-6 h-6 text-slate-300" />
+          </div>
+        </div>
+        <h3 className="text-sm font-semibold text-slate-700">No recent activity</h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-[200px] mx-auto">Activity will show up here as issues are updated</p>
       </div>
     );
   }
@@ -324,28 +335,28 @@ function QuickActions() {
     <div className="flex items-center gap-2 flex-wrap">
       <Link
         to="/issues"
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200/60 rounded-xl hover:bg-slate-50 hover:shadow-sm transition-all duration-150"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-700 bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 rounded-xl hover:from-slate-50 hover:to-slate-100 hover:shadow-sm transition-all duration-150"
       >
         <BarChart3 className="w-4 h-4 text-slate-400" />
         All Issues
       </Link>
       <Link
         to="/issues?priority=critical"
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 hover:shadow-sm transition-all duration-150"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-700 bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-xl hover:from-red-100 hover:to-rose-100 hover:shadow-sm transition-all duration-150"
       >
         <Zap className="w-4 h-4" />
         Critical Issues
       </Link>
       <Link
         to="/issues?status=open"
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 hover:shadow-sm transition-all duration-150"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl hover:from-blue-100 hover:to-indigo-100 hover:shadow-sm transition-all duration-150"
       >
         <Filter className="w-4 h-4" />
         Open Issues
       </Link>
       <Link
         to="/issues?status=in_progress"
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-xl hover:bg-amber-100 hover:shadow-sm transition-all duration-150"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-xl hover:from-amber-100 hover:to-orange-100 hover:shadow-sm transition-all duration-150"
       >
         <Clock className="w-4 h-4" />
         In Progress
@@ -356,17 +367,25 @@ function QuickActions() {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center py-20 animate-fade-up">
-      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mb-6">
-        <Inbox className="w-10 h-10 text-slate-400" />
+    <div className="text-center py-16 animate-fade-up">
+      {/* Illustration */}
+      <div className="relative mx-auto mb-6 w-24 h-24">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-3xl rotate-6 opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl -rotate-3 opacity-80" />
+        <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+          <Inbox className="w-10 h-10 text-slate-300" />
+        </div>
       </div>
-      <h2 className="text-lg font-semibold text-slate-800 mb-1">No data yet</h2>
-      <p className="text-sm text-slate-500 max-w-sm text-center mb-6">
+      {/* Text */}
+      <h3 className="text-base font-semibold text-slate-800">Your dashboard is waiting</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto">
         Issues will appear on your dashboard as they are reported through Slack or created manually.
+        Get started by creating your first issue.
       </p>
+      {/* Action */}
       <Link
         to="/issues"
-        className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+        className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
       >
         Go to Issues
         <ArrowRight className="w-4 h-4" />
@@ -430,7 +449,7 @@ export default function Dashboard() {
   const recentIssueIds = (recentIssues?.items ?? []).map(i => i.id);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-gradient-to-b from-slate-50/30 via-white to-slate-50/30 min-h-screen">
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-6 md:p-8 animate-fade-up">
         <div className="relative z-10">
@@ -475,90 +494,99 @@ export default function Dashboard() {
       ) : (
         <>
           {/* Quick Actions */}
-          <div className="animate-fade-up-1">
+          <div className="animate-fade-up-1 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 rounded-2xl p-4 -mx-1">
             <QuickActions />
           </div>
 
           {/* Stat Cards - Primary Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard
-              label="Total Issues"
-              value={stats?.total_issues ?? 0}
-              icon={<BarChart3 className="w-5 h-5 text-slate-600" />}
-              color="text-slate-600"
-              iconBg="bg-slate-100"
-              sparkColor="bg-slate-400"
-              sparkValue={stats?.total_issues ?? 0}
-              sparkMax={stats?.total_issues ?? 1}
-              staggerDelay={0}
-            />
-            <StatCard
-              label="Open"
-              value={stats?.open_issues ?? 0}
-              icon={<AlertCircle className="w-5 h-5 text-blue-600" />}
-              color="text-blue-600"
-              iconBg="bg-blue-50"
-              sparkColor="bg-blue-500"
-              sparkValue={stats?.open_issues ?? 0}
-              sparkMax={stats?.total_issues ?? 1}
-              staggerDelay={50}
-            />
-            <StatCard
-              label="In Progress"
-              value={stats?.in_progress_issues ?? 0}
-              icon={<Loader2 className="w-5 h-5 text-amber-600" />}
-              color="text-amber-600"
-              iconBg="bg-amber-50"
-              sparkColor="bg-amber-500"
-              sparkValue={stats?.in_progress_issues ?? 0}
-              sparkMax={stats?.total_issues ?? 1}
-              staggerDelay={100}
-            />
+          <div className="bg-slate-50/50 rounded-2xl p-4 -mx-1 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <StatCard
+                label="Total Issues"
+                value={stats?.total_issues ?? 0}
+                icon={<BarChart3 className="w-5 h-5 text-slate-600" />}
+                color="text-slate-600"
+                iconBg="bg-slate-100"
+                sparkColor="bg-slate-400"
+                sparkValue={stats?.total_issues ?? 0}
+                sparkMax={stats?.total_issues ?? 1}
+                staggerDelay={0}
+              />
+              <StatCard
+                label="Open"
+                value={stats?.open_issues ?? 0}
+                icon={<AlertCircle className="w-5 h-5 text-blue-600" />}
+                color="text-blue-600"
+                iconBg="bg-blue-50"
+                sparkColor="bg-blue-500"
+                sparkValue={stats?.open_issues ?? 0}
+                sparkMax={stats?.total_issues ?? 1}
+                staggerDelay={50}
+              />
+              <StatCard
+                label="In Progress"
+                value={stats?.in_progress_issues ?? 0}
+                icon={<Loader2 className="w-5 h-5 text-amber-600" />}
+                color="text-amber-600"
+                iconBg="bg-amber-50"
+                sparkColor="bg-amber-500"
+                sparkValue={stats?.in_progress_issues ?? 0}
+                sparkMax={stats?.total_issues ?? 1}
+                staggerDelay={100}
+              />
+            </div>
+
+            {/* Stat Cards - Secondary Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <StatCard
+                label="Resolved"
+                value={stats?.resolved_issues ?? 0}
+                icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                color="text-emerald-600"
+                iconBg="bg-emerald-50"
+                sparkColor="bg-emerald-500"
+                sparkValue={stats?.resolved_issues ?? 0}
+                sparkMax={stats?.total_issues ?? 1}
+                staggerDelay={150}
+              />
+              <StatCard
+                label="Critical"
+                value={stats?.critical_issues ?? 0}
+                icon={<AlertTriangle className="w-5 h-5 text-red-600" />}
+                color="text-red-600"
+                iconBg="bg-red-50"
+                sparkColor="bg-red-500"
+                sparkValue={stats?.critical_issues ?? 0}
+                sparkMax={stats?.total_issues ?? 1}
+                staggerDelay={200}
+              />
+              <StatCard
+                label="Avg Resolution"
+                value={formatHours(stats?.avg_resolution_hours ?? null)}
+                icon={<Clock className="w-5 h-5 text-violet-600" />}
+                color="text-violet-600"
+                iconBg="bg-violet-50"
+                sparkColor="bg-violet-500"
+                sparkValue={Math.min(stats?.avg_resolution_hours ?? 0, 100)}
+                sparkMax={100}
+                staggerDelay={250}
+              />
+            </div>
           </div>
 
-          {/* Stat Cards - Secondary Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard
-              label="Resolved"
-              value={stats?.resolved_issues ?? 0}
-              icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-              color="text-emerald-600"
-              iconBg="bg-emerald-50"
-              sparkColor="bg-emerald-500"
-              sparkValue={stats?.resolved_issues ?? 0}
-              sparkMax={stats?.total_issues ?? 1}
-              staggerDelay={150}
-            />
-            <StatCard
-              label="Critical"
-              value={stats?.critical_issues ?? 0}
-              icon={<AlertTriangle className="w-5 h-5 text-red-600" />}
-              color="text-red-600"
-              iconBg="bg-red-50"
-              sparkColor="bg-red-500"
-              sparkValue={stats?.critical_issues ?? 0}
-              sparkMax={stats?.total_issues ?? 1}
-              staggerDelay={200}
-            />
-            <StatCard
-              label="Avg Resolution"
-              value={formatHours(stats?.avg_resolution_hours ?? null)}
-              icon={<Clock className="w-5 h-5 text-violet-600" />}
-              color="text-violet-600"
-              iconBg="bg-violet-50"
-              sparkColor="bg-violet-500"
-              sparkValue={Math.min(stats?.avg_resolution_hours ?? 0, 100)}
-              sparkMax={100}
-              staggerDelay={250}
-            />
-          </div>
+          {/* Section divider */}
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
 
           {/* Two column layout: Team Stats + Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-up-4">
             {/* Team Stats */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 bg-gradient-to-br from-slate-50 to-white rounded-2xl p-5 border border-slate-100/80 relative overflow-hidden">
+              {/* Decorative dot */}
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-400/30" />
+              <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-indigo-400/20" />
               <div className="flex items-center justify-between mb-3 animate-section-fade">
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <div className="w-1 h-4 rounded-full bg-blue-500" />
                   <Users className="w-4 h-4 text-slate-400" />
                   Team Performance
                 </h2>
@@ -580,24 +608,36 @@ export default function Dashboard() {
             </div>
 
             {/* Activity Feed */}
-            <div>
+            <div className="bg-gradient-to-br from-indigo-50/40 to-purple-50/30 rounded-2xl p-5 border border-indigo-100/40 relative overflow-hidden">
+              {/* Decorative dot */}
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-indigo-400/30" />
+              <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-purple-400/20" />
               <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '100ms' }}>
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-slate-400" />
+                  <div className="w-1 h-4 rounded-full bg-indigo-500" />
+                  <Activity className="w-4 h-4 text-indigo-400" />
                   Recent Activity
                 </h2>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden hover:shadow-md transition-all duration-200">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-indigo-100/40 overflow-hidden hover:shadow-md transition-all duration-200">
                 <ActivityFeed />
               </div>
             </div>
           </div>
 
+          {/* Section divider */}
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
+
           {/* Recent Issues */}
-          <div className="animate-fade-up-5">
+          <div className="animate-fade-up-5 bg-white rounded-2xl p-5 border-l-4 border-l-blue-400/60 border border-slate-100/80 relative overflow-hidden">
+            {/* Decorative dots */}
+            <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-400/20" />
+            <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-slate-400/15" />
+            <div className="absolute top-7 right-5 w-1 h-1 rounded-full bg-blue-300/25" />
             <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '200ms' }}>
               <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-slate-400" />
+                <div className="w-1 h-4 rounded-full bg-blue-500" />
+                <AlertCircle className="w-4 h-4 text-blue-400" />
                 Recent Issues
               </h2>
               <Link
@@ -615,12 +655,16 @@ export default function Dashboard() {
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-slate-200/60 py-12 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                  <Inbox className="w-6 h-6 text-slate-300" />
+              <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 py-14 text-center">
+                <div className="relative mx-auto mb-5 w-20 h-20">
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-3xl rotate-6 opacity-60" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl -rotate-3 opacity-80" />
+                  <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+                    <Inbox className="w-8 h-8 text-slate-300" />
+                  </div>
                 </div>
-                <p className="text-sm text-slate-500 font-medium">No issues found</p>
-                <p className="text-xs text-slate-400 mt-1">Issues will appear here as they are reported</p>
+                <h3 className="text-base font-semibold text-slate-800">No issues found</h3>
+                <p className="text-sm text-slate-500 mt-1.5 max-w-xs mx-auto">Issues will appear here as they are reported via Slack or created manually</p>
               </div>
             )}
             {recentIssues && recentIssues.total > 8 && (

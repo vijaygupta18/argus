@@ -598,12 +598,12 @@ function AddMemberOverlay({
 }
 
 const TEAM_ACCENT_COLORS = [
-  { border: 'border-l-blue-500', bg: 'bg-blue-500' },
-  { border: 'border-l-emerald-500', bg: 'bg-emerald-500' },
-  { border: 'border-l-violet-500', bg: 'bg-violet-500' },
-  { border: 'border-l-amber-500', bg: 'bg-amber-500' },
-  { border: 'border-l-rose-500', bg: 'bg-rose-500' },
-  { border: 'border-l-cyan-500', bg: 'bg-cyan-500' },
+  { border: 'border-l-blue-500', bg: 'bg-blue-500', gradient: 'from-blue-500 to-blue-400', stripe: 'from-blue-500/10 via-blue-400/5 to-transparent', dot: 'bg-blue-500' },
+  { border: 'border-l-emerald-500', bg: 'bg-emerald-500', gradient: 'from-emerald-500 to-emerald-400', stripe: 'from-emerald-500/10 via-emerald-400/5 to-transparent', dot: 'bg-emerald-500' },
+  { border: 'border-l-violet-500', bg: 'bg-violet-500', gradient: 'from-violet-500 to-violet-400', stripe: 'from-violet-500/10 via-violet-400/5 to-transparent', dot: 'bg-violet-500' },
+  { border: 'border-l-amber-500', bg: 'bg-amber-500', gradient: 'from-amber-500 to-amber-400', stripe: 'from-amber-500/10 via-amber-400/5 to-transparent', dot: 'bg-amber-500' },
+  { border: 'border-l-rose-500', bg: 'bg-rose-500', gradient: 'from-rose-500 to-rose-400', stripe: 'from-rose-500/10 via-rose-400/5 to-transparent', dot: 'bg-rose-500' },
+  { border: 'border-l-cyan-500', bg: 'bg-cyan-500', gradient: 'from-cyan-500 to-cyan-400', stripe: 'from-cyan-500/10 via-cyan-400/5 to-transparent', dot: 'bg-cyan-500' },
 ];
 
 function TeamCard({ team, index }: { team: Team; index: number }) {
@@ -665,9 +665,15 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
 
   return (
     <>
-      <div className={`bg-white rounded-2xl border border-slate-200/60 border-l-[5px] ${accent.border} overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}>
+      <div className={`bg-white rounded-2xl border border-slate-200/60 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 relative`}>
+        {/* Gradient left border accent */}
+        <div className={`absolute left-0 top-0 bottom-0 w-[5px] bg-gradient-to-b ${accent.gradient} rounded-l-2xl`} />
+        {/* Decorative gradient stripe at card top */}
+        <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${accent.stripe}`} />
+        {/* Subtle inner shadow overlay at top for depth */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-slate-100/30 to-transparent pointer-events-none" />
         {/* Card Header */}
-        <div className="p-5 pb-4">
+        <div className="p-5 pb-4 relative">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2.5 mb-1">
@@ -697,20 +703,21 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                       <Users className="w-3 h-3 text-slate-400" />
                     </div>
                   )}
-                  <span className="text-xs font-medium text-slate-600">
-                    {activeMemberCount} member{activeMemberCount !== 1 ? 's' : ''}
+                  <span className="text-xs text-slate-600">
+                    <span className={`font-bold text-sm ${accent.dot.replace('bg-', 'text-')}`}>{activeMemberCount}</span>{' '}
+                    member{activeMemberCount !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-xs font-medium text-slate-600">
-                    {openIssueCount} open
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
+                  <span className="text-xs text-slate-600">
+                    <span className="font-bold text-sm text-blue-600">{openIssueCount}</span> open
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-medium text-slate-600">
-                    {resolvedCount} resolved
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/40" />
+                  <span className="text-xs text-slate-600">
+                    <span className="font-bold text-sm text-emerald-600">{resolvedCount}</span> resolved
                   </span>
                 </div>
               </div>
@@ -764,7 +771,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
 
         {/* Members section */}
         <div className={`expand-section ${expanded ? 'expanded' : ''}`}>
-          <div className="border-t border-slate-100 px-5 py-4">
+          <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
             {membersLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
@@ -776,7 +783,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                     {members.map((member, memberIdx) => (
                       <div
                         key={member.id}
-                        className={`bg-slate-50/80 rounded-xl p-3.5 border border-slate-100 transition-all duration-150 hover:border-slate-200 ${
+                        className={`bg-white rounded-2xl p-3.5 border border-slate-100 transition-all duration-150 hover:border-slate-200 hover:shadow-sm ${
                           !member.is_active ? 'opacity-60' : ''
                         } ${expanded ? 'animate-fade-up' : ''}`}
                         style={expanded ? { animationDelay: `${memberIdx * 60}ms` } : undefined}
@@ -877,14 +884,18 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                      <Users className="w-6 h-6 text-slate-300" />
+                  <div className="text-center py-10">
+                    <div className="relative mx-auto mb-5 w-16 h-16">
+                      <div className="absolute inset-0 bg-gradient-to-br from-violet-100 to-purple-100 rounded-2xl rotate-6 opacity-60" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl -rotate-3 opacity-80" />
+                      <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+                        <Users className="w-7 h-7 text-slate-300" />
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">No members yet</p>
-                    {canManage && (
-                      <p className="text-xs text-slate-400 mt-1">Add your first team member below</p>
-                    )}
+                    <h3 className="text-sm font-semibold text-slate-700">No members yet</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-[220px] mx-auto">
+                      {canManage ? 'Add your first team member to get started' : 'No members have been added to this team yet'}
+                    </p>
                   </div>
                 )}
 
@@ -1018,7 +1029,7 @@ export default function TeamManager() {
       <AddTeamModal open={showAddTeam} onClose={() => setShowAddTeam(false)} />
 
       {teamCount > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           {teams?.map((team, index) => (
             <div key={team.id} className="animate-stagger-in" style={{ animationDelay: `${index * 80}ms` }}>
               <TeamCard team={team} index={index} />
@@ -1026,18 +1037,25 @@ export default function TeamManager() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-20 bg-white rounded-2xl border border-slate-200/60">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mx-auto mb-6">
-            <Users className="w-10 h-10 text-slate-400" />
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/60">
+          {/* Illustration */}
+          <div className="relative mx-auto mb-6 w-24 h-24">
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-100 to-purple-100 rounded-3xl rotate-6 opacity-60" />
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl -rotate-3 opacity-80" />
+            <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+              <Users className="w-10 h-10 text-slate-300" />
+            </div>
           </div>
-          <h2 className="text-lg font-semibold text-slate-800 mb-1">No teams yet</h2>
-          <p className="text-sm text-slate-500 max-w-sm mx-auto mb-6">
-            Create teams to organize your issue assignments and streamline your workflow.
+          {/* Text */}
+          <h3 className="text-base font-semibold text-slate-800">No teams yet</h3>
+          <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto">
+            Create teams to organize your issue assignments and streamline your workflow across your organization.
           </p>
+          {/* Action */}
           {isAdmin && (
             <button
               onClick={() => setShowAddTeam(true)}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:scale-[1.02]"
+              className="mt-5 inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-all duration-200 shadow-sm hover:shadow-md"
             >
               <Plus className="w-4 h-4" />
               Create your first team

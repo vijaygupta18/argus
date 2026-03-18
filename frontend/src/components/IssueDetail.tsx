@@ -185,29 +185,21 @@ function ReasonModal({
 
 function RCASkeleton() {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-purple-100 animate-pulse" />
-        <div className="h-4 w-48 bg-slate-100 rounded animate-pulse" />
-      </div>
-      <div className="space-y-3">
-        <div className="h-3 bg-slate-100 rounded animate-pulse w-full" />
-        <div className="h-3 bg-slate-100 rounded animate-pulse w-5/6" />
-        <div className="h-3 bg-slate-100 rounded animate-pulse w-4/6" />
-      </div>
-      <div className="space-y-2 pt-2">
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-32" />
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-full" />
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-5/6" />
-      </div>
-      <div className="space-y-2 pt-2">
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-40" />
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-full" />
-        <div className="h-3 bg-slate-50 rounded animate-pulse w-3/4" />
-      </div>
-      <div className="flex items-center gap-2 pt-1">
-        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-        <span className="text-xs text-slate-400">AI is analyzing this issue...</span>
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="text-center py-8">
+        <div className="relative mx-auto mb-4 w-14 h-14">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-100 to-violet-100 rounded-2xl rotate-6 opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl -rotate-3 opacity-80" />
+          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+            <Brain className="w-6 h-6 text-purple-300 animate-pulse" />
+          </div>
+        </div>
+        <h3 className="text-sm font-semibold text-slate-700">AI analysis in progress</h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-[240px] mx-auto">The AI is investigating this issue and will provide a root cause analysis shortly</p>
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+          <span className="text-xs text-slate-400">Analyzing...</span>
+        </div>
       </div>
     </div>
   );
@@ -350,7 +342,7 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
               <RCAMarkdown content={String(data.full_report)} />
             </div>
           ) : (
-            <div className="px-5 pb-5 pt-4 space-y-5">
+            <div className="px-6 pb-6 pt-5 space-y-6">
               {/* Summary */}
               {data?.summary && (
                 <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50 animate-rca-reveal" style={{ animationDelay: '0ms' }}>
@@ -493,9 +485,16 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-8">
-        <History className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-        <p className="text-sm text-slate-400">No history available</p>
+      <div className="text-center py-10">
+        <div className="relative mx-auto mb-4 w-14 h-14">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-gray-100 rounded-2xl rotate-6 opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
+          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
+            <History className="w-6 h-6 text-slate-300" />
+          </div>
+        </div>
+        <h3 className="text-sm font-semibold text-slate-700">No history yet</h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-[200px] mx-auto">Changes to this issue will be tracked here</p>
       </div>
     );
   }
@@ -581,8 +580,8 @@ function DescriptionSection({ issue }: { issue: Issue }) {
   }, [issue.description]);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 mb-2">
+      <div className="flex items-center gap-2 mb-4">
         <MessageSquare className="w-4 h-4 text-slate-400" />
         <h3 className="text-sm font-semibold text-slate-900">Description</h3>
       </div>
@@ -765,7 +764,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const isActiveIssue = issue.status !== 'resolved' && issue.status !== 'closed';
 
   return (
-    <div className={`space-y-6 animate-page-in ${successFlash ? 'animate-success-flash' : ''}`}>
+    <div className={`space-y-8 animate-page-in ${successFlash ? 'animate-success-flash' : ''}`}>
       {/* Resolve Modal */}
       <ReasonModal
         title="Resolve Issue"
@@ -792,7 +791,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
 
       {/* Breadcrumb + Header */}
-      <div>
+      <div className="mb-2">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm text-slate-400 mb-4">
           <button
@@ -826,7 +825,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
       {/* Floating Toolbar */}
       {canEdit && (
-        <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm mb-2">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Status dropdown */}
             <div className="relative" ref={statusRef}>
@@ -1028,8 +1027,8 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       )}
 
       {/* Info Grid -- Single Card */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
           {/* Team */}
           <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '0ms' }}>
             <div className="flex items-center gap-1.5">
@@ -1128,7 +1127,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
       {/* AI RCA */}
       {issue.ai_rca && typeof issue.ai_rca === 'object' && (issue.ai_rca as Record<string, unknown>).status === 'investigating' ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-violet-50 flex items-center justify-center ring-1 ring-purple-100">
               <Brain className="w-4 h-4 text-purple-600 animate-pulse" />
@@ -1166,16 +1165,16 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
       {/* AI Categorization */}
       {issue.ai_categorization && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center gap-2.5 mb-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center gap-2.5 mb-4">
             <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center ring-1 ring-teal-100">
               <Tag className="w-4 h-4 text-teal-600" />
             </div>
             <h3 className="text-sm font-semibold text-slate-900">AI Categorization</h3>
           </div>
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             {issue.ai_categorization.reasoning ? (
-              <p className="text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-3 italic">
+              <p className="text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-4 italic">
                 {String(issue.ai_categorization.reasoning)}
               </p>
             ) : null}
@@ -1204,7 +1203,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       )}
 
       {/* History */}
-      <div className="bg-white rounded-xl border border-slate-200">
+      <div className="bg-white rounded-xl border border-slate-200 mt-2">
         <div className="px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-slate-400" />
@@ -1216,7 +1215,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
             )}
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-6">
           <HistoryTimeline history={history ?? []} />
         </div>
       </div>

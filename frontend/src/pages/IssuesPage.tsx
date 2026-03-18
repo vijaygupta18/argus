@@ -65,6 +65,26 @@ function priorityBarClass(priority: IssuePriority | null): string {
   }
 }
 
+function priorityHoverGradient(priority: IssuePriority | null): string {
+  switch (priority) {
+    case 'critical': return 'group-hover:bg-gradient-to-r group-hover:from-red-500/5 group-hover:to-transparent';
+    case 'high': return 'group-hover:bg-gradient-to-r group-hover:from-orange-500/5 group-hover:to-transparent';
+    case 'medium': return 'group-hover:bg-gradient-to-r group-hover:from-yellow-500/5 group-hover:to-transparent';
+    case 'low': return 'group-hover:bg-gradient-to-r group-hover:from-green-500/5 group-hover:to-transparent';
+    default: return 'group-hover:bg-gradient-to-r group-hover:from-slate-400/5 group-hover:to-transparent';
+  }
+}
+
+function priorityGlowClass(priority: IssuePriority | null): string {
+  switch (priority) {
+    case 'critical': return 'priority-glow-critical';
+    case 'high': return 'priority-glow-high';
+    case 'medium': return 'priority-glow-medium';
+    case 'low': return 'priority-glow-low';
+    default: return '';
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Create Issue Modal                                                   */
 /* ------------------------------------------------------------------ */
@@ -233,9 +253,9 @@ function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left issue-card-hover border-l-[3px] ${priorityBarClass(issue.priority)} bg-white rounded-lg border border-slate-200 px-4 py-3.5 group cursor-pointer hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+      className={`w-full text-left issue-card-hover border-l-[4px] ${priorityBarClass(issue.priority)} ${priorityGlowClass(issue.priority)} bg-white rounded-lg border border-slate-200 px-4 py-3.5 group cursor-pointer shadow-sm hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200`}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className={`flex items-start justify-between gap-4 ${priorityHoverGradient(issue.priority)} -mx-4 -my-3.5 px-4 py-3.5 rounded-lg transition-all duration-200`}>
         {/* Left content */}
         <div className="flex-1 min-w-0">
           {/* Title row */}
@@ -323,29 +343,35 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 function EmptyState({
   hasFilters,
   onClear,
+  onCreateClick,
+  canCreate,
 }: {
   hasFilters: boolean;
   onClear: () => void;
+  onCreateClick?: () => void;
+  canCreate?: boolean;
 }) {
   return (
-    <div className="text-center py-20 px-6">
-      {/* Illustration-like composition */}
-      <div className="relative w-24 h-24 mx-auto mb-6">
-        <div className="absolute inset-0 bg-slate-100 rounded-2xl rotate-6" />
-        <div className="absolute inset-0 bg-slate-50 rounded-2xl -rotate-3" />
-        <div className="absolute inset-0 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
+    <div className="text-center py-16 px-6">
+      {/* Stacked card illustration */}
+      <div className="relative mx-auto mb-6 w-24 h-24">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl rotate-6 opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl -rotate-3 opacity-80" />
+        <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
           <Inbox className="w-10 h-10 text-slate-300" />
         </div>
       </div>
-      <h3 className="text-base font-semibold text-slate-700 mb-1">
+      {/* Text */}
+      <h3 className="text-base font-semibold text-slate-800">
         {hasFilters ? 'No issues match your filters' : 'No issues yet'}
       </h3>
-      <p className="text-sm text-slate-400 max-w-xs mx-auto">
+      <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto">
         {hasFilters
           ? 'Try adjusting your filters or broadening your search query to find what you\'re looking for.'
-          : 'Issues will appear here as they are reported via Slack or created manually.'}
+          : 'Issues will appear here as they are reported via Slack or created manually. Start tracking your first production issue today.'}
       </p>
-      {hasFilters && (
+      {/* Action */}
+      {hasFilters ? (
         <button
           onClick={onClear}
           className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
@@ -353,7 +379,15 @@ function EmptyState({
           <X className="w-3.5 h-3.5" />
           Clear all filters
         </button>
-      )}
+      ) : canCreate && onCreateClick ? (
+        <button
+          onClick={onCreateClick}
+          className="mt-5 inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
+        >
+          <Plus className="w-4 h-4" />
+          Create your first issue
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -486,7 +520,7 @@ export default function IssuesPage() {
       />
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm animate-slide-down">
+      <div className="bg-gradient-to-b from-slate-50 to-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm animate-slide-down">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <form onSubmit={handleSearchSubmit} className="flex-1 min-w-[220px]">
@@ -638,12 +672,12 @@ export default function IssuesPage() {
         </div>
       ) : data && data.items.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200">
-          <EmptyState hasFilters={hasActiveFilters} onClear={clearAllFilters} />
+          <EmptyState hasFilters={hasActiveFilters} onClear={clearAllFilters} onCreateClick={() => setShowCreateModal(true)} canCreate={!!canCreate} />
         </div>
       ) : (
         <>
           {/* Issue cards */}
-          <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto custom-scrollbar pr-1">
+          <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto custom-scrollbar pr-1 bg-white/50 rounded-2xl shadow-sm border border-slate-100 p-3">
             {data?.items.map((issue, idx) => (
               <div
                 key={issue.id}
@@ -691,7 +725,7 @@ export default function IssuesPage() {
                       onClick={() => updateFilter('page', String(pageNum))}
                       className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
                         pageNum === page
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-105'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
