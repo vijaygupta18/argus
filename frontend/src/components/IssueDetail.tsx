@@ -1156,6 +1156,15 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
               </div>
             ))}
           </div>
+          {/* Pulsing indicator so it doesn't look static */}
+          <div className="flex items-center gap-2 pt-3 border-t border-slate-100 mt-3">
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-xs text-slate-400">Vishwakarma is analyzing evidence...</span>
+          </div>
         </div>
       ) : issue.ai_rca ? (
         <RCAPanel rca={issue.ai_rca} />
