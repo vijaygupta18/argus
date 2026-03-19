@@ -502,8 +502,8 @@ async def update_issue(
         stmt = select(TeamMember).where(TeamMember.id == update_data["assigned_to"])
         r = await db.execute(stmt)
         m = r.scalar_one_or_none()
-        if m and m.role == "leader":
-            raise HTTPException(status_code=400, detail=f"{m.name} is a team leader and cannot be assigned issues")
+        if m and m.role == "manager":
+            raise HTTPException(status_code=400, detail=f"{m.name} is a team manager and cannot be assigned issues")
 
     if "assignees" in update_data and update_data["assignees"]:
         leader_names = []
@@ -513,10 +513,10 @@ async def update_issue(
                 stmt = select(TeamMember).where(TeamMember.id == uuid.UUID(str(aid)))
                 r = await db.execute(stmt)
                 m = r.scalar_one_or_none()
-                if m and m.role == "leader":
+                if m and m.role == "manager":
                     leader_names.append(m.name)
         if leader_names:
-            raise HTTPException(status_code=400, detail=f"{', '.join(leader_names)} are team leaders and cannot be assigned issues")
+            raise HTTPException(status_code=400, detail=f"{', '.join(leader_names)} are team managers and cannot be assigned issues")
 
     # Strip 'reason' from update_data before passing to issue_service (it's not a model field)
     reason_text = update_data.pop("reason", None)
@@ -667,7 +667,7 @@ async def update_issue(
             from app.slack_bot.messages import PRIORITY_COLOR, PRIORITY_EMOJI
             stmt = select(TeamMember).where(
                 TeamMember.team_id == updated.team_id,
-                TeamMember.role == "leader",
+                TeamMember.role == "manager",
                 TeamMember.is_active == True,
                 TeamMember.slack_user_id != None,
                 TeamMember.slack_user_id != "",

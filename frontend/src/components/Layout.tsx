@@ -22,12 +22,12 @@ const navItems = [
   { to: '/how-it-works', icon: Sparkles, label: 'How It Works' },
 ];
 
-function RoleBadge({ role }: { role: 'admin' | 'leader' | 'worker' | 'reader' }) {
+function RoleBadge({ role }: { role: 'admin' | 'manager' | 'agent' | 'viewer' }) {
   const colors = {
     admin: 'bg-purple-100 text-purple-700 ring-1 ring-purple-200',
-    leader: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
-    worker: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
-    reader: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',
+    manager: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
+    agent: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+    viewer: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',
   };
 
   return (
@@ -72,13 +72,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     staleTime: 60_000,
   });
 
-  const userRole: 'admin' | 'leader' | 'worker' | 'reader' = isAdmin
+  const userRole: 'admin' | 'manager' | 'agent' | 'viewer' = isAdmin
     ? 'admin'
-    : user?.roles && Object.values(user.roles).includes('leader')
-      ? 'leader'
+    : user?.roles && Object.values(user.roles).includes('manager')
+      ? 'manager'
       : user?.roles && Object.keys(user.roles).length > 0
-        ? 'worker'
-        : 'reader';
+        ? 'agent'
+        : 'viewer';
 
   return (
     <>

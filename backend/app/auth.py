@@ -23,13 +23,13 @@ class UserContext:
         self.name = user.name
         self.slack_user_id = user.slack_user_id
         self.is_admin = user.is_admin
-        self.team_roles = team_roles  # {team_id_str: "leader"|"worker"}
+        self.team_roles = team_roles  # {team_id_str: "manager"|"agent"}
 
     def get_role_for_team(self, team_id) -> str | None:
         return self.team_roles.get(str(team_id))
 
     def is_leader_of(self, team_id) -> bool:
-        return self.is_admin or self.get_role_for_team(team_id) == "leader"
+        return self.is_admin or self.get_role_for_team(team_id) == "manager"
 
     def is_member_of(self, team_id) -> bool:
         return str(team_id) in self.team_roles
@@ -103,10 +103,10 @@ def require_admin(user: UserContext = Depends(get_current_user)) -> UserContext:
     return user
 
 
-def require_admin_or_leader(user: UserContext = Depends(get_current_user)) -> UserContext:
-    if not user.is_admin and "leader" not in user.team_roles.values():
+def require_admin_or_manager(user: UserContext = Depends(get_current_user)) -> UserContext:
+    if not user.is_admin and "manager" not in user.team_roles.values():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin or team leader access required",
+            detail="Admin or team manager access required",
         )
     return user

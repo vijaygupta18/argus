@@ -59,24 +59,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.is_admin ?? false;
 
   const isLeaderOf = useCallback(
-    (teamId: string) => user?.roles[teamId] === 'leader',
+    (teamId: string) => user?.roles[teamId] === 'manager',
     [user]
   );
 
   const isWorkerOf = useCallback(
-    (teamId: string) => user?.roles[teamId] === 'worker',
+    (teamId: string) => user?.roles[teamId] === 'agent',
     [user]
   );
 
   const canManageTeam = useCallback(
-    (teamId: string) => isAdmin || (user?.roles[teamId] === 'leader'),
+    (teamId: string) => isAdmin || (user?.roles[teamId] === 'manager'),
     [isAdmin, user]
   );
 
   const canEditIssue = useCallback(
     (issue: Issue) => {
       if (isAdmin) return true;
-      if (issue.team_id && user?.roles[issue.team_id] === 'leader') return true;
+      if (issue.team_id && user?.roles[issue.team_id] === 'manager') return true;
       // Check multi-assignees by slack_user_id (both must be truthy to avoid undefined===undefined)
       if (user?.slack_user_id && issue.assignees?.some((a: { slack_user_id?: string }) =>
         a.slack_user_id && a.slack_user_id === user.slack_user_id

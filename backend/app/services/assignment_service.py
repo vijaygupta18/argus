@@ -19,7 +19,7 @@ async def assign_issue(db: AsyncSession, team_id: uuid.UUID) -> TeamMember | Non
         select(TeamMember)
         .where(TeamMember.team_id == team_id)
         .where(TeamMember.is_active.is_(True))
-        .where(TeamMember.role == "worker")
+        .where(TeamMember.role == "agent")
         .order_by(TeamMember.open_issue_count.asc(), TeamMember.total_assigned_count.asc())
         .limit(1)
     )

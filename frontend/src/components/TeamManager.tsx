@@ -648,7 +648,7 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
   });
 
   const toggleMemberRole = useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: 'leader' | 'worker' }) =>
+    mutationFn: ({ memberId, role }: { memberId: string; role: 'manager' | 'agent' }) =>
       updateMember(memberId, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-members', team.id] });
@@ -801,22 +801,22 @@ function TeamCard({ team, index }: { team: Team; index: number }) {
                               }`}>
                                 {member.name}
                               </span>
-                              {member.role === 'leader' ? (
+                              {member.role === 'manager' ? (
                                 <span
-                                  onClick={() => isAdmin ? toggleMemberRole.mutate({ memberId: member.id, role: 'worker' }) : undefined}
+                                  onClick={() => isAdmin ? toggleMemberRole.mutate({ memberId: member.id, role: 'agent' }) : undefined}
                                   className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 role-badge-transition ${isAdmin ? 'cursor-pointer hover:bg-violet-200' : ''}`}
-                                  title={isAdmin ? 'Click to set as Worker' : 'Leader'}
+                                  title={isAdmin ? 'Click to set as Agent' : 'Manager'}
                                 >
-                                  Leader
+                                  Manager
                                 </span>
                               ) : (
                                 isAdmin && (
                                   <span
-                                    onClick={() => toggleMemberRole.mutate({ memberId: member.id, role: 'leader' })}
+                                    onClick={() => toggleMemberRole.mutate({ memberId: member.id, role: 'manager' })}
                                     className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 cursor-pointer hover:bg-violet-100 hover:text-violet-700 role-badge-transition"
-                                    title="Click to set as Leader"
+                                    title="Click to set as Manager"
                                   >
-                                    Worker
+                                    Agent
                                   </span>
                                 )
                               )}

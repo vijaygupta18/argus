@@ -65,15 +65,15 @@ async def add_member(
     slack_user_id = data.slack_user_id
     name = data.name
     email = data.email
-    role = data.role or "worker"
+    role = data.role or "agent"
 
     # Validate role
-    if role not in ("leader", "worker"):
-        raise HTTPException(status_code=400, detail="Role must be 'leader' or 'worker'")
+    if role not in ("manager", "agent"):
+        raise HTTPException(status_code=400, detail="Role must be 'manager' or 'agent'")
 
-    # Only admins can add members with leader role
-    if role == "leader" and not user.is_admin:
-        raise HTTPException(status_code=403, detail="Only admin can assign leader role")
+    # Only admins can add members with manager role
+    if role == "manager" and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admin can assign manager role")
 
     # Auto-resolve Slack user ID from email if not provided
     if not slack_user_id and email:
@@ -139,7 +139,7 @@ async def list_assignable_members(
         .options(joinedload(TeamMember.team))
         .where(
             TeamMember.is_active == True,
-            TeamMember.role == "worker",
+            TeamMember.role == "agent",
         )
         .order_by(TeamMember.name)
     )
@@ -200,14 +200,14 @@ async def update_member(
     # Role change permission checks
     if "role" in update_data:
         new_role = update_data["role"]
-        if new_role not in ("leader", "worker"):
-            raise HTTPException(status_code=400, detail="Role must be 'leader' or 'worker'")
-        # Only admin can set role to "leader"
-        if new_role == "leader" and not user.is_admin:
-            raise HTTPException(status_code=403, detail="Only admin can assign leader role")
-        # Leaders can only set role to "worker"
-        if new_role != "worker" and not user.is_admin:
-            raise HTTPException(status_code=403, detail="Leaders can only assign worker role")
+        if new_role not in ("manager", "agent"):
+            raise HTTPException(status_code=400, detail="Role must be 'manager' or 'agent'")
+        # Only admin can set role to "manager"
+        if new_role == "manager" and not user.is_admin:
+            raise HTTPException(status_code=403, detail="Only admin can assign manager role")
+        # Managers can only set role to "agent"
+        if new_role != "agent" and not user.is_admin:
+            raise HTTPException(status_code=403, detail="Managers can only assign agent role")
 
     for field, value in update_data.items():
         setattr(member, field, value)

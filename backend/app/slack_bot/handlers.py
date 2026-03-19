@@ -106,7 +106,7 @@ def register_handlers(app):
                     text(f"""
                         SELECT id, name, slack_user_id, email, open_issue_count
                         FROM {_s}team_members
-                        WHERE team_id = :team_id AND is_active = true AND role = 'worker'
+                        WHERE team_id = :team_id AND is_active = true AND role = 'agent'
                         ORDER BY open_issue_count ASC, total_assigned_count ASC
                         LIMIT 1
                         FOR UPDATE SKIP LOCKED
@@ -204,7 +204,7 @@ def register_handlers(app):
                 leaders_result = await conn.execute(
                     text(f"""
                         SELECT name, slack_user_id FROM {_s}team_members
-                        WHERE team_id = :team_id AND role = 'leader' AND is_active = true
+                        WHERE team_id = :team_id AND role = 'manager' AND is_active = true
                         AND slack_user_id IS NOT NULL AND slack_user_id != ''
                     """),
                     {"team_id": team_id},

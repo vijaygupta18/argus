@@ -271,6 +271,31 @@ function RecentIssueCard({ issue, staggerDelay = 0 }: { issue: Issue; staggerDel
   );
 }
 
+function formatActivityAction(entry: IssueHistory): string {
+  const action = entry.action?.toLowerCase() || '';
+  if (action === 'created') return 'created a new issue';
+  if (action === 'assigned') return `assigned to ${entry.new_value || 'someone'}`;
+  if (action === 'resolved') return 'marked as resolved';
+  if (action === 'resolution_notes' || action === 'auto_resolve_reason') {
+    const reason = entry.new_value;
+    if (reason && reason.length > 60) return `resolved: ${reason.slice(0, 60)}...`;
+    return reason ? `resolved: ${reason}` : 'added resolution notes';
+  }
+  if (action === 'close_reason') {
+    const reason = entry.new_value;
+    return reason ? `closed: ${reason.length > 60 ? reason.slice(0, 60) + '...' : reason}` : 'closed the issue';
+  }
+  if (action === 'changed status' || action === 'status') {
+    return entry.new_value ? `changed status to ${entry.new_value}` : 'changed status';
+  }
+  if (action === 'closed') return 'closed the issue';
+  // Fallback: show action + value
+  if (entry.new_value && !['resolved', 'open', 'in_progress', 'closed'].includes(entry.new_value)) {
+    return `${entry.action}: ${entry.new_value.length > 50 ? entry.new_value.slice(0, 50) + '...' : entry.new_value}`;
+  }
+  return entry.action;
+}
+
 function ActivityFeed() {
   const { data: latest, isLoading } = useQuery<IssueHistory[]>({
     queryKey: ['recent-activity'],
@@ -317,10 +342,7 @@ function ActivityFeed() {
             <p className="text-xs text-slate-700">
               <span className="font-medium">{entry.performed_by || 'System'}</span>
               {' '}
-              <span className="text-slate-500">{entry.action}</span>
-              {entry.new_value && (
-                <span className="text-slate-500"> to <span className="font-medium text-slate-700">{entry.new_value}</span></span>
-              )}
+              <span className="text-slate-500">{formatActivityAction(entry)}</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">{timeAgo(entry.created_at)}</p>
           </div>

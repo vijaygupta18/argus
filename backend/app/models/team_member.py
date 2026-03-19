@@ -20,7 +20,7 @@ class TeamMember(Base):
     __tablename__ = "team_members"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('leader', 'worker')",
+            "role IN ('manager', 'agent')",
             name="ck_team_members_role",
         ),
         UniqueConstraint("team_id", "email", name="uq_team_members_team_id_email"),
@@ -48,7 +48,7 @@ class TeamMember(Base):
         Boolean, default=False, server_default="false"
     )
     role: Mapped[str] = mapped_column(
-        String(20), default="worker", server_default="worker", nullable=False
+        String(20), default="agent", server_default="agent", nullable=False
     )
     open_issue_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0"
