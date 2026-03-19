@@ -96,7 +96,7 @@ interface StatCardProps {
   sparkMax: number;
   trend?: { delta: number; direction: 'up' | 'down' | 'flat' };
   animClass?: string;
-  staggerDelay?: number;
+  href?: string;
 }
 
 function AnimatedNumber({ value }: { value: number }) {
@@ -104,11 +104,10 @@ function AnimatedNumber({ value }: { value: number }) {
   return <>{formatNumber(displayed)}</>;
 }
 
-function StatCard({ label, value, icon, iconBg, sparkColor, sparkValue, sparkMax, trend, animClass = '', staggerDelay = 0 }: StatCardProps) {
-  return (
+function StatCard({ label, value, icon, iconBg, sparkColor, sparkValue, sparkMax, trend, animClass = '', href }: StatCardProps) {
+  const content = (
     <div
-      className={`bg-white rounded-2xl border border-slate-200/60 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group animate-stagger-in ${animClass}`}
-      style={{ animationDelay: `${staggerDelay}ms` }}
+      className={`bg-white rounded-2xl border border-slate-200/60 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group ${href ? 'cursor-pointer' : ''} ${animClass}`}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -138,18 +137,19 @@ function StatCard({ label, value, icon, iconBg, sparkColor, sparkValue, sparkMax
       <SparkBar value={sparkValue} max={sparkMax} color={sparkColor} />
     </div>
   );
+
+  if (href) {
+    return <Link to={href} className="block">{content}</Link>;
+  }
+  return content;
 }
 
 function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
   if (teamStats.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/60 p-8 text-center">
-        <div className="relative mx-auto mb-5 w-16 h-16">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-2xl rotate-6 opacity-60" />
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-            <Users className="w-7 h-7 text-slate-300" />
-          </div>
+        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+          <Users className="w-6 h-6 text-slate-400" />
         </div>
         <h3 className="text-sm font-semibold text-slate-700">No team data yet</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-[220px] mx-auto">Stats will appear once teams are assigned issues</p>
@@ -175,8 +175,7 @@ function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
         return (
           <div
             key={ts.team_id}
-            className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 animate-slide-up-in"
-            style={{ animationDelay: `${i * 80}ms` }}
+            className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -213,14 +212,24 @@ function TeamStatsCards({ teamStats }: { teamStats: TeamStats[] }) {
   );
 }
 
-function RecentIssueCard({ issue, staggerDelay = 0 }: { issue: Issue; staggerDelay?: number }) {
+function getIssueAgeBg(issue: Issue): string {
+  const isActive = issue.status === 'open' || issue.status === 'in_progress';
+  if (!isActive) return 'bg-white';
+  const ageMs = Date.now() - new Date(issue.created_at).getTime();
+  const ageHours = ageMs / (1000 * 60 * 60);
+  if (ageHours > 48) return 'bg-red-50/40';
+  if (ageHours > 24) return 'bg-amber-50/50';
+  return 'bg-white';
+}
+
+function RecentIssueCard({ issue }: { issue: Issue }) {
   const navigate = useNavigate();
+  const ageBg = getIssueAgeBg(issue);
 
   return (
     <div
       onClick={() => navigate(`/issues/${issue.id}`)}
-      className="bg-white rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group relative animate-stagger-in"
-      style={{ animationDelay: `${staggerDelay}ms` }}
+      className={`${ageBg} rounded-2xl border border-slate-200/60 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group relative`}
     >
       <div className="flex items-start gap-3">
         {/* Status dot */}
@@ -313,12 +322,8 @@ function ActivityFeed() {
   if (!latest || latest.length === 0) {
     return (
       <div className="text-center py-10">
-        <div className="relative mx-auto mb-4 w-14 h-14">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-2xl rotate-6 opacity-60" />
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-            <Activity className="w-6 h-6 text-slate-300" />
-          </div>
+        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+          <Activity className="w-6 h-6 text-slate-400" />
         </div>
         <h3 className="text-sm font-semibold text-slate-700">No recent activity</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-[200px] mx-auto">Activity will show up here as issues are updated</p>
@@ -332,8 +337,7 @@ function ActivityFeed() {
         <Link
           key={entry.id}
           to={`/issues/${entry.issue_id}`}
-          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors animate-stagger-in"
-          style={{ animationDelay: `${i * 60}ms` }}
+          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
         >
           <div className="mt-1 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
             <Activity className="w-3 h-3 text-slate-400" />
@@ -389,14 +393,10 @@ function QuickActions() {
 
 function EmptyState() {
   return (
-    <div className="text-center py-16 animate-fade-up">
+    <div className="text-center py-16">
       {/* Illustration */}
-      <div className="relative mx-auto mb-6 w-24 h-24">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-3xl rotate-6 opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl -rotate-3 opacity-80" />
-        <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-          <Inbox className="w-10 h-10 text-slate-300" />
-        </div>
+      <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+        <Inbox className="w-6 h-6 text-slate-400" />
       </div>
       {/* Text */}
       <h3 className="text-base font-semibold text-slate-800">Your dashboard is waiting</h3>
@@ -471,9 +471,9 @@ export default function Dashboard() {
   const recentIssueIds = (recentIssues?.items ?? []).map(i => i.id);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-gradient-to-b from-slate-50/30 via-white to-slate-50/30 min-h-screen">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 min-h-screen">
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-6 md:p-8 animate-fade-up">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-6 md:p-8">
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-1">
             <CalendarDays className="w-4 h-4 text-blue-200" />
@@ -505,10 +505,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        {/* Decorative circles */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5" />
-        <div className="absolute -bottom-8 -right-4 w-24 h-24 rounded-full bg-white/5" />
-        <div className="absolute top-1/2 right-1/4 w-16 h-16 rounded-full bg-white/5" />
       </div>
 
       {!hasData ? (
@@ -516,7 +512,7 @@ export default function Dashboard() {
       ) : (
         <>
           {/* Quick Actions */}
-          <div className="animate-fade-up-1 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 rounded-2xl p-4 -mx-1">
+          <div className="bg-white rounded-2xl p-4 -mx-1">
             <QuickActions />
           </div>
 
@@ -532,7 +528,7 @@ export default function Dashboard() {
                 sparkColor="bg-slate-400"
                 sparkValue={stats?.total_issues ?? 0}
                 sparkMax={stats?.total_issues ?? 1}
-                staggerDelay={0}
+                href="/issues"
               />
               <StatCard
                 label="Open"
@@ -543,7 +539,7 @@ export default function Dashboard() {
                 sparkColor="bg-blue-500"
                 sparkValue={stats?.open_issues ?? 0}
                 sparkMax={stats?.total_issues ?? 1}
-                staggerDelay={50}
+                href="/issues?status=open"
               />
               <StatCard
                 label="In Progress"
@@ -554,7 +550,7 @@ export default function Dashboard() {
                 sparkColor="bg-amber-500"
                 sparkValue={stats?.in_progress_issues ?? 0}
                 sparkMax={stats?.total_issues ?? 1}
-                staggerDelay={100}
+                href="/issues?status=in_progress"
               />
             </div>
 
@@ -569,7 +565,7 @@ export default function Dashboard() {
                 sparkColor="bg-emerald-500"
                 sparkValue={stats?.resolved_issues ?? 0}
                 sparkMax={stats?.total_issues ?? 1}
-                staggerDelay={150}
+                href="/issues?status=resolved"
               />
               <StatCard
                 label="Critical"
@@ -580,7 +576,7 @@ export default function Dashboard() {
                 sparkColor="bg-red-500"
                 sparkValue={stats?.critical_issues ?? 0}
                 sparkMax={stats?.total_issues ?? 1}
-                staggerDelay={200}
+                href="/issues?priority=critical"
               />
               <StatCard
                 label="Avg Resolution"
@@ -591,7 +587,6 @@ export default function Dashboard() {
                 sparkColor="bg-violet-500"
                 sparkValue={Math.min(stats?.avg_resolution_hours ?? 0, 100)}
                 sparkMax={100}
-                staggerDelay={250}
               />
             </div>
           </div>
@@ -600,13 +595,10 @@ export default function Dashboard() {
           <div className="h-px bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
 
           {/* Two column layout: Team Stats + Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-up-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Team Stats */}
-            <div className="lg:col-span-2 bg-gradient-to-br from-slate-50 to-white rounded-2xl p-5 border border-slate-100/80 relative overflow-hidden">
-              {/* Decorative dot */}
-              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-400/30" />
-              <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-indigo-400/20" />
-              <div className="flex items-center justify-between mb-3 animate-section-fade">
+            <div className="lg:col-span-2 bg-slate-50 rounded-2xl p-5 border border-slate-100/80">
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                   <div className="w-1 h-4 rounded-full bg-blue-500" />
                   <Users className="w-4 h-4 text-slate-400" />
@@ -630,18 +622,15 @@ export default function Dashboard() {
             </div>
 
             {/* Activity Feed */}
-            <div className="bg-gradient-to-br from-indigo-50/40 to-purple-50/30 rounded-2xl p-5 border border-indigo-100/40 relative overflow-hidden">
-              {/* Decorative dot */}
-              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-indigo-400/30" />
-              <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-purple-400/20" />
-              <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '100ms' }}>
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100/80">
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                   <div className="w-1 h-4 rounded-full bg-indigo-500" />
                   <Activity className="w-4 h-4 text-indigo-400" />
                   Recent Activity
                 </h2>
               </div>
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-indigo-100/40 overflow-hidden hover:shadow-md transition-all duration-200">
+              <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden">
                 <ActivityFeed />
               </div>
             </div>
@@ -651,12 +640,8 @@ export default function Dashboard() {
           <div className="h-px bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
 
           {/* Recent Issues */}
-          <div className="animate-fade-up-5 bg-white rounded-2xl p-5 border-l-4 border-l-blue-400/60 border border-slate-100/80 relative overflow-hidden">
-            {/* Decorative dots */}
-            <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-400/20" />
-            <div className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-slate-400/15" />
-            <div className="absolute top-7 right-5 w-1 h-1 rounded-full bg-blue-300/25" />
-            <div className="flex items-center justify-between mb-3 animate-section-fade" style={{ animationDelay: '200ms' }}>
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/60">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <div className="w-1 h-4 rounded-full bg-blue-500" />
                 <AlertCircle className="w-4 h-4 text-blue-400" />
@@ -673,17 +658,13 @@ export default function Dashboard() {
             {recentIssues && recentIssues.items.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {recentIssues.items.slice(0, 8).map((issue, i) => (
-                  <RecentIssueCard key={issue.id} issue={issue} staggerDelay={i * 30} />
+                  <RecentIssueCard key={issue.id} issue={issue} />
                 ))}
               </div>
             ) : (
-              <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 py-14 text-center">
-                <div className="relative mx-auto mb-5 w-20 h-20">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-blue-100 rounded-3xl rotate-6 opacity-60" />
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl -rotate-3 opacity-80" />
-                  <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-                    <Inbox className="w-8 h-8 text-slate-300" />
-                  </div>
+              <div className="bg-slate-50 rounded-2xl border border-slate-200/60 py-14 text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <Inbox className="w-6 h-6 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-800">No issues found</h3>
                 <p className="text-sm text-slate-500 mt-1.5 max-w-xs mx-auto">Issues will appear here as they are reported via Slack or created manually</p>

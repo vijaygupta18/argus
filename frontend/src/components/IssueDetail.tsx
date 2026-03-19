@@ -141,6 +141,42 @@ function ReasonModal({
             <label className="block text-sm font-medium text-slate-700 mb-1">
               {label} <span className="text-red-500">*</span>
             </label>
+            {variant === 'resolve' && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {['Fixed in production', 'Not an issue', 'Duplicate', 'User error', 'Config change applied'].map((tpl) => (
+                  <button
+                    key={tpl}
+                    type="button"
+                    onClick={() => setReason(tpl)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
+                      reason === tpl
+                        ? 'bg-green-50 border-green-300 text-green-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {tpl}
+                  </button>
+                ))}
+              </div>
+            )}
+            {variant === 'close' && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {["Won't fix", 'Duplicate', 'Cannot reproduce', 'Out of scope'].map((tpl) => (
+                  <button
+                    key={tpl}
+                    type="button"
+                    onClick={() => setReason(tpl)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
+                      reason === tpl
+                        ? 'bg-slate-200 border-slate-400 text-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {tpl}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -187,12 +223,8 @@ function RCASkeleton() {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <div className="text-center py-8">
-        <div className="relative mx-auto mb-4 w-14 h-14">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-100 to-violet-100 rounded-2xl rotate-6 opacity-60" />
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl -rotate-3 opacity-80" />
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-            <Brain className="w-6 h-6 text-purple-300 animate-pulse" />
-          </div>
+        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+          <Brain className="w-6 h-6 text-slate-400 animate-pulse" />
         </div>
         <h3 className="text-sm font-semibold text-slate-700">AI analysis in progress</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-[240px] mx-auto">The AI is investigating this issue and will provide a root cause analysis shortly</p>
@@ -449,33 +481,17 @@ function RCAPanel({ rca }: { rca: Issue['ai_rca'] }) {
 
 function getHistoryIcon(action: string) {
   const lower = action.toLowerCase();
-  if (lower.includes('status') || lower.includes('changed status'))
-    return <RefreshCw className="w-3 h-3 text-blue-500" />;
-  if (lower.includes('assign'))
-    return <UserCheck className="w-3 h-3 text-indigo-500" />;
-  if (lower.includes('team'))
-    return <ArrowRightLeft className="w-3 h-3 text-amber-500" />;
   if (lower.includes('resolve'))
     return <CheckCircle2 className="w-3 h-3 text-green-500" />;
-  if (lower.includes('close'))
-    return <X className="w-3 h-3 text-slate-400" />;
-  if (lower.includes('priority'))
-    return <AlertCircle className="w-3 h-3 text-orange-500" />;
   if (lower.includes('create') || lower.includes('reported'))
-    return <GitBranch className="w-3 h-3 text-purple-500" />;
-  if (lower.includes('categori'))
-    return <Tag className="w-3 h-3 text-teal-500" />;
+    return <GitBranch className="w-3 h-3 text-blue-500" />;
   return <Clock className="w-3 h-3 text-slate-400" />;
 }
 
 function getHistoryDotColor(action: string): string {
   const lower = action.toLowerCase();
   if (lower.includes('resolve')) return 'bg-green-500 ring-green-100';
-  if (lower.includes('close')) return 'bg-slate-400 ring-slate-100';
-  if (lower.includes('assign')) return 'bg-indigo-500 ring-indigo-100';
-  if (lower.includes('status')) return 'bg-blue-500 ring-blue-100';
-  if (lower.includes('team')) return 'bg-amber-500 ring-amber-100';
-  if (lower.includes('create') || lower.includes('reported')) return 'bg-purple-500 ring-purple-100';
+  if (lower.includes('create') || lower.includes('reported') || lower.includes('assign')) return 'bg-blue-500 ring-blue-100';
   return 'bg-slate-300 ring-slate-100';
 }
 
@@ -486,12 +502,8 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
   if (history.length === 0) {
     return (
       <div className="text-center py-10">
-        <div className="relative mx-auto mb-4 w-14 h-14">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-gray-100 rounded-2xl rotate-6 opacity-60" />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl -rotate-3 opacity-80" />
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-            <History className="w-6 h-6 text-slate-300" />
-          </div>
+        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+          <History className="w-6 h-6 text-slate-400" />
         </div>
         <h3 className="text-sm font-semibold text-slate-700">No history yet</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-[200px] mx-auto">Changes to this issue will be tracked here</p>
@@ -505,7 +517,7 @@ function HistoryTimeline({ history }: { history: IssueHistoryType[] }) {
   return (
     <div className="space-y-0">
       {visibleHistory.map((entry, idx) => (
-        <div key={entry.id} className="flex gap-3 animate-stagger-in" style={{ animationDelay: `${idx * 50}ms` }}>
+        <div key={entry.id} className="flex gap-3">
           {/* Timeline line */}
           <div className="flex flex-col items-center">
             <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-4 ${getHistoryDotColor(entry.action)}`}>
@@ -803,7 +815,13 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm text-slate-400 mb-4">
           <button
-            onClick={() => navigate('/issues')}
+            onClick={() => {
+              if (window.history.length > 2 && document.referrer && document.referrer.includes(window.location.origin)) {
+                navigate(-1);
+              } else {
+                navigate('/issues');
+              }
+            }}
             className="flex items-center gap-1 text-slate-500 hover:text-blue-600 transition-colors font-medium"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -842,8 +860,8 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                 disabled={updateMutation.isPending}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
               >
-                {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 text-slate-500" />}
-                {updateMutation.isPending ? 'Updating...' : 'Status'}
+                {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <StatusBadge status={issue.status} />}
+                {updateMutation.isPending ? 'Updating...' : null}
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
               {statusMenuOpen && (
@@ -881,7 +899,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
                 >
                   {teamChangeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />}
-                  {teamChangeMutation.isPending ? 'Moving...' : 'Team'}
+                  {teamChangeMutation.isPending ? 'Moving...' : (issue.team_name || 'Unassigned')}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 {teamMenuOpen && (
@@ -919,7 +937,13 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 hover:scale-[1.02] disabled:opacity-50 transition-all"
                 >
                   {assignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5 text-slate-500" />}
-                  {assignMutation.isPending ? 'Assigning...' : 'Assign'}
+                  {assignMutation.isPending ? 'Assigning...' : (
+                    issue.assignees?.length > 1
+                      ? `${issue.assignees.length} assigned`
+                      : issue.assignees?.length === 1
+                        ? issue.assignees[0].name
+                        : issue.assignee_name || 'Unassigned'
+                  )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 {assignMenuOpen && (
@@ -1038,7 +1062,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
           {/* Team */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '0ms' }}>
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
             <div className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Team</span>
@@ -1056,7 +1080,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Channel */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '50ms' }}>
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
             <div className="flex items-center gap-1.5">
               <Hash className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Channel</span>
@@ -1079,7 +1103,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Assigned to */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Assigned to</span>
@@ -1098,7 +1122,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Reported by */}
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0 animate-stagger-in" style={{ animationDelay: '150ms' }}>
+          <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:border-b-0 sm:pb-0">
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Reported by</span>
@@ -1109,7 +1133,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
           </div>
 
           {/* Created */}
-          <div className="flex items-start justify-between animate-stagger-in" style={{ animationDelay: '200ms' }}>
+          <div className="flex items-start justify-between">
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-sm text-slate-500">Created</span>
@@ -1119,7 +1143,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
 
           {/* Resolved at (if applicable) */}
           {issue.resolved_at && (
-            <div className="flex items-start justify-between animate-stagger-in" style={{ animationDelay: '250ms' }}>
+            <div className="flex items-start justify-between">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                 <span className="text-sm text-slate-500">Resolved</span>

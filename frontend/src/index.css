@@ -14,23 +14,23 @@ body {
   background-color: #f8fafc;
 }
 
-/* Page fade-in animation */
-@keyframes page-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ── Page transitions ── */
+
+.page-enter {
+  animation: page-enter 0.2s ease-out;
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-page-in {
-  animation: page-fade-in 0.3s ease-out both;
+  animation: page-enter 0.3s ease-out both;
 }
 
-/* Green flash for success */
+/* ── Feedback animations ── */
+
 @keyframes success-flash {
   0% { background-color: transparent; }
   20% { background-color: rgb(220 252 231 / 0.6); }
@@ -41,37 +41,25 @@ body {
   animation: success-flash 1s ease-out;
 }
 
-/* Slide down for dropdowns */
+/* ── Dropdowns & modals ── */
+
 @keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .animate-dropdown {
   animation: slide-down 0.15s ease-out both;
 }
 
-/* Modal backdrop */
 @keyframes modal-backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
 @keyframes modal-content-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .animate-modal-backdrop {
@@ -82,92 +70,33 @@ body {
   animation: modal-content-in 0.2s ease-out both;
 }
 
-/* Card hover lift */
-.issue-card-hover {
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-}
+/* ── Filter chip scale-in ── */
 
-.issue-card-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.04);
-}
-
-/* Priority left bar colors */
-.priority-bar-critical { border-left-color: #ef4444; }
-.priority-bar-high { border-left-color: #f97316; }
-.priority-bar-medium { border-left-color: #eab308; }
-.priority-bar-low { border-left-color: #22c55e; }
-.priority-bar-none { border-left-color: #cbd5e1; }
-
-/* Priority glow on left bar */
-.priority-glow-critical { box-shadow: inset 4px 0 8px -4px rgba(239, 68, 68, 0.25); }
-.priority-glow-high { box-shadow: inset 4px 0 8px -4px rgba(249, 115, 22, 0.25); }
-.priority-glow-medium { box-shadow: inset 4px 0 8px -4px rgba(234, 179, 8, 0.2); }
-.priority-glow-low { box-shadow: inset 4px 0 8px -4px rgba(34, 197, 94, 0.2); }
-
-/* Description expand */
-.description-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Staggered fade-in for child elements */
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-up {
-  animation: fade-up 0.4s ease-out both;
-}
-
-.animate-fade-up-1 { animation: fade-up 0.4s ease-out 0.05s both; }
-.animate-fade-up-2 { animation: fade-up 0.4s ease-out 0.1s both; }
-.animate-fade-up-3 { animation: fade-up 0.4s ease-out 0.15s both; }
-.animate-fade-up-4 { animation: fade-up 0.4s ease-out 0.2s both; }
-.animate-fade-up-5 { animation: fade-up 0.4s ease-out 0.25s both; }
-
-/* Scale-in animation for filter chips */
 @keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.75);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.75); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out both;
 }
 
-/* Slide-down for filter bar on mount */
-@keyframes slide-down-bar {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* ── Filter bar slide ── */
 
 .animate-slide-down {
-  animation: slide-down-bar 0.3s ease-out both;
+  animation: slide-down 0.3s ease-out both;
 }
 
-/* Smooth description expand/collapse */
+/* ── Priority left bar colors ── */
+
+.priority-bar-critical { border-left-color: #ef4444; }
+.priority-bar-high { border-left-color: #f97316; }
+.priority-bar-medium { border-left-color: #eab308; }
+.priority-bar-low { border-left-color: #22c55e; }
+.priority-bar-none { border-left-color: #cbd5e1; }
+
+/* ── Description expand/collapse ── */
+
 .description-smooth {
   transition: max-height 0.35s ease-in-out;
   overflow: hidden;
@@ -181,16 +110,11 @@ body {
   max-height: 2000px;
 }
 
-/* RCA section stagger reveal */
+/* ── RCA section reveal ── */
+
 @keyframes rca-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-rca-reveal {
@@ -198,57 +122,39 @@ body {
   animation: rca-reveal 0.35s ease-out forwards;
 }
 
-/* Staggered card entrance — opacity + slide-up, delay set via inline style */
-@keyframes stagger-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* ── Expand/collapse sections (teams) ── */
 
-.animate-stagger-in {
+.expand-section {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease-in-out, opacity 0.25s ease-in-out;
   opacity: 0;
-  animation: stagger-in 0.4s ease-out forwards;
 }
 
-/* Slide up from bottom (for team stats) */
-@keyframes slide-up-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.expand-section.expanded {
+  max-height: 2000px;
+  opacity: 1;
 }
 
-.animate-slide-up-in {
-  opacity: 0;
-  animation: slide-up-in 0.45s ease-out forwards;
+/* ── Badge pulse on value change ── */
+
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 
-/* Section header subtle fade */
-@keyframes section-fade {
-  from {
-    opacity: 0;
-    transform: translateX(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.animate-badge-pulse {
+  animation: badge-pulse 0.4s ease-in-out;
 }
 
-.animate-section-fade {
-  animation: section-fade 0.35s ease-out both;
+/* ── Role badge click feedback ── */
+
+.role-badge-transition {
+  transition: all 0.3s ease;
 }
 
-/* Global scrollbar styling */
+/* ── Scrollbars ── */
+
 * {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
@@ -272,7 +178,6 @@ body {
   background-color: #94a3b8;
 }
 
-/* Custom scrollbar class (for targeted usage) */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -290,199 +195,70 @@ body {
   background-color: rgb(148 163 184 / 0.6);
 }
 
-/* Smooth expand/collapse via max-height */
-.expand-section {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.35s ease-in-out, opacity 0.25s ease-in-out;
-  opacity: 0;
-}
+/* ── How It Works page animations ── */
 
-.expand-section.expanded {
-  max-height: 2000px;
-  opacity: 1;
-}
-
-/* Subtle badge pulse when value changes */
-@keyframes badge-pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-}
-
-.animate-badge-pulse {
-  animation: badge-pulse 0.4s ease-in-out;
-}
-
-/* Fade-in for user section on mount */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.4s ease-out both;
-}
-
-/* Role badge transition glow */
-@keyframes role-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-  50% {
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-  }
-}
-
-.role-badge-transition {
-  transition: all 0.3s ease;
-}
-
-.role-badge-transition:active {
-  animation: role-pulse 0.5s ease-in-out;
-}
-
-/* Selection color */
-::selection {
-  background-color: #3b82f6;
-  color: white;
-}
-
-/* Focus ring style */
-*:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-/* Page transition */
-.page-enter {
-  animation: pageEnter 0.2s ease-out;
-}
-
-@keyframes pageEnter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Floating animation for gradient blobs */
-@keyframes float-slow {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(10px, -15px) scale(1.02);
-  }
-  66% {
-    transform: translate(-8px, 10px) scale(0.98);
-  }
-}
-
-@keyframes float-slow-reverse {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(-12px, 12px) scale(0.98);
-  }
-  66% {
-    transform: translate(8px, -10px) scale(1.03);
-  }
-}
-
-.animate-float-slow {
-  animation: float-slow 8s ease-in-out infinite;
-}
-
-.animate-float-slow-reverse {
-  animation: float-slow-reverse 10s ease-in-out infinite;
-}
-
-/* Pulsing glow for callback page spinner */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 20px 6px rgba(59, 130, 246, 0.4);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* ===== How It Works Page Animations ===== */
-
-/* Pulsing shield */
-@keyframes hiw-shield-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 20px 40px -8px rgba(59, 130, 246, 0.25);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 20px 50px -4px rgba(59, 130, 246, 0.35);
-  }
-}
-
-.hiw-pulse-shield {
-  animation: hiw-shield-pulse 3s ease-in-out infinite;
-}
-
-/* Timeline line grow */
 @keyframes hiw-grow-line {
-  from {
-    transform: scaleY(0);
-  }
-  to {
-    transform: scaleY(1);
-  }
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
 }
 
 .hiw-line-grow {
   animation: hiw-grow-line 0.8s ease-out forwards;
 }
 
-/* Typewriter effect for Slack message */
 @keyframes hiw-typewriter {
-  from {
-    max-width: 0;
-  }
-  to {
-    max-width: 16ch;
-  }
+  from { max-width: 0; }
+  to { max-width: 16ch; }
 }
 
-.hiw-typewriter {
-  animation: hiw-typewriter 1.5s steps(20, end) 0.5s both;
-  border-right: 2px solid #64748b;
-  animation-fill-mode: both;
+@keyframes hiw-blink-cursor {
+  from, to { border-color: transparent; }
+  50% { border-color: #64748b; }
 }
 
 .hiw-typewriter {
   animation: hiw-typewriter 1.5s steps(20, end) 0.5s both, hiw-blink-cursor 0.75s step-end 4;
+  border-right: 2px solid #64748b;
 }
 
-@keyframes hiw-blink-cursor {
-  from, to {
-    border-color: transparent;
-  }
-  50% {
-    border-color: #64748b;
-  }
+@keyframes hiw-shield-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.hiw-pulse-shield {
+  animation: hiw-shield-pulse 3s ease-in-out infinite;
+}
+
+/* ── Shared utility animations ── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
+}
+
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-stagger-in {
+  opacity: 0;
+  animation: stagger-in 0.4s ease-out forwards;
+}
+
+/* ── Selection & focus ── */
+
+::selection {
+  background-color: #3b82f6;
+  color: white;
+}
+
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }

@@ -65,25 +65,6 @@ function priorityBarClass(priority: IssuePriority | null): string {
   }
 }
 
-function priorityHoverGradient(priority: IssuePriority | null): string {
-  switch (priority) {
-    case 'critical': return 'group-hover:bg-gradient-to-r group-hover:from-red-500/5 group-hover:to-transparent';
-    case 'high': return 'group-hover:bg-gradient-to-r group-hover:from-orange-500/5 group-hover:to-transparent';
-    case 'medium': return 'group-hover:bg-gradient-to-r group-hover:from-yellow-500/5 group-hover:to-transparent';
-    case 'low': return 'group-hover:bg-gradient-to-r group-hover:from-green-500/5 group-hover:to-transparent';
-    default: return 'group-hover:bg-gradient-to-r group-hover:from-slate-400/5 group-hover:to-transparent';
-  }
-}
-
-function priorityGlowClass(priority: IssuePriority | null): string {
-  switch (priority) {
-    case 'critical': return 'priority-glow-critical';
-    case 'high': return 'priority-glow-high';
-    case 'medium': return 'priority-glow-medium';
-    case 'low': return 'priority-glow-low';
-    default: return '';
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* Create Issue Modal                                                   */
@@ -246,6 +227,21 @@ function CreateIssueModal({
 }
 
 /* ------------------------------------------------------------------ */
+/* Issue age background — subtle warmth for aging open issues           */
+/* ------------------------------------------------------------------ */
+
+const HOUR_MS = 3_600_000;
+
+function issueAgeBg(issue: Issue): string {
+  const isActive = issue.status === 'open' || issue.status === 'in_progress';
+  if (!isActive) return 'bg-white';
+  const ageMs = Date.now() - new Date(issue.created_at).getTime();
+  if (ageMs > 48 * HOUR_MS) return 'bg-red-50/30';
+  if (ageMs > 24 * HOUR_MS) return 'bg-amber-50/40';
+  return 'bg-white';
+}
+
+/* ------------------------------------------------------------------ */
 /* Issue Card Row                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -253,9 +249,9 @@ function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left issue-card-hover border-l-[4px] ${priorityBarClass(issue.priority)} ${priorityGlowClass(issue.priority)} bg-white rounded-lg border border-slate-200 px-4 py-3.5 group cursor-pointer shadow-sm hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200`}
+      className={`w-full text-left border-l-[4px] ${priorityBarClass(issue.priority)} ${issueAgeBg(issue)} rounded-lg border border-slate-200 px-4 py-3.5 group cursor-pointer shadow-sm hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200`}
     >
-      <div className={`flex items-start justify-between gap-4 ${priorityHoverGradient(issue.priority)} -mx-4 -my-3.5 px-4 py-3.5 rounded-lg transition-all duration-200`}>
+      <div className="flex items-start justify-between gap-4">
         {/* Left content */}
         <div className="flex-1 min-w-0">
           {/* Title row */}
@@ -353,13 +349,8 @@ function EmptyState({
 }) {
   return (
     <div className="text-center py-16 px-6">
-      {/* Stacked card illustration */}
-      <div className="relative mx-auto mb-6 w-24 h-24">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl rotate-6 opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl -rotate-3 opacity-80" />
-        <div className="relative bg-white rounded-3xl shadow-sm border border-slate-200/60 w-full h-full flex items-center justify-center">
-          <Inbox className="w-10 h-10 text-slate-300" />
-        </div>
+      <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+        <Inbox className="w-6 h-6 text-slate-400" />
       </div>
       {/* Text */}
       <h3 className="text-base font-semibold text-slate-800">
@@ -678,12 +669,8 @@ export default function IssuesPage() {
         <>
           {/* Issue cards */}
           <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto custom-scrollbar pr-1 bg-white/50 rounded-2xl shadow-sm border border-slate-100 p-3">
-            {data?.items.map((issue, idx) => (
-              <div
-                key={issue.id}
-                className="animate-stagger-in"
-                style={{ animationDelay: `${idx * 30}ms` }}
-              >
+            {data?.items.map((issue) => (
+              <div key={issue.id}>
                 <IssueRow
                   issue={issue}
                   onClick={() => navigate(`/issues/${issue.id}`)}

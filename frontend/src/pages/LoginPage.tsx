@@ -35,35 +35,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100 flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.03]" style={{
-        backgroundImage: `radial-gradient(circle at 1px 1px, #64748b 1px, transparent 0)`,
-        backgroundSize: '32px 32px',
-      }} />
-
-      {/* Decorative gradient blobs with floating animation */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-200/20 rounded-full blur-3xl animate-float-slow" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-float-slow-reverse" />
-
-      <div className="w-full max-w-sm relative">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 mb-5 shadow-lg shadow-blue-500/25">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 mb-5">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Argus</h1>
-          <p className="text-sm text-slate-500 mt-1.5">Production Issue Dashboard</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Argus</h1>
+          <p className="text-sm text-gray-500 mt-1">Production Issue Dashboard</p>
         </div>
 
-        {/* Glass-morphism card */}
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-xl shadow-slate-200/50 p-8">
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Welcome back</h2>
-          <p className="text-sm text-slate-500 mb-6">Sign in with your Google workspace account</p>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+          <h2 className="text-base font-medium text-gray-900 mb-1">Welcome back</h2>
+          <p className="text-sm text-gray-500 mb-6">Sign in with your Google workspace account</p>
 
           <button
             onClick={handleGoogleLogin}
             disabled={isGoogleLoading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 text-sm font-semibold text-slate-700 bg-white border-2 border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
           >
             {isGoogleLoading ? (
               <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
@@ -88,7 +77,7 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <p className="text-xs text-slate-400 text-center mt-6">
+        <p className="text-xs text-gray-400 text-center mt-6">
           Powered by AI &middot; Built for NammaYatri
         </p>
       </div>

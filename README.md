@@ -155,11 +155,13 @@ Argus:     New Issue Tracked
 ### AI-Powered
 - **Issue Categorization** — priority, category, team assignment
 - **Root Cause Analysis** — deep investigation via Vishwakarma (production) or generic AI (local)
+- **Auto-Resolve** — if RCA determines the issue is not actionable (false alarm, already fixed, transient), auto-resolves with a CX-friendly explanation
+- **CX-Friendly Messaging** — all Slack notifications are rewritten in plain language using AI summarization
 - **Live Progress** — streaming SSE shows investigation steps in real-time
 - **Automatic Fallback** — Vishwakarma fails? Falls back to generic AI. AI fails? Shows manual investigation steps.
 
 ### Role-Based Access
-| | Admin | Leader | Worker | Reader |
+| | Admin | Manager | Agent | Viewer |
 |---|:---:|:---:|:---:|:---:|
 | View dashboard & issues | Yes | Yes | Yes | Yes |
 | Create issues | Yes | Yes | Yes | - |
@@ -171,17 +173,19 @@ Argus:     New Issue Tracked
 | Create / Delete teams | Yes | - | - | - |
 
 ### Dashboard
-- Stats overview (total, open, in-progress, resolved, critical)
+- Clickable stat cards — click "Critical" to jump straight to filtered list
 - Per-team progress bars (open vs resolved ratio)
-- Recent issues with quick access
-- Activity feed — latest changes across all issues
+- Recent issues with age indicators (amber 24h+, red 48h+)
+- Activity feed with human-readable action labels
 - Quick action links (All Issues, Critical, My Issues)
 
-### Multi-Assign
-- Assign multiple people to one issue
-- Searchable dropdown across all teams
-- Everyone assigned gets a DM
-- All assignees tracked in history
+### Issue Management
+- Quick-resolve templates — one-click common reasons ("Fixed in production", "Not an issue", etc.)
+- Non-blocking resolve — DB updates instantly, Slack notification with AI summary in background
+- Toolbar shows current state (status badge, team name, assignee names)
+- Back button preserves filter context
+- Multi-assign with searchable dropdown across all teams
+- Everyone assigned gets a DM, all tracked in history
 
 ---
 
@@ -223,7 +227,7 @@ Uses a dedicated `argus` schema within a shared PostgreSQL RDS — fully isolate
 
 ```sql
 argus.teams          -- Teams with reminder settings
-argus.team_members   -- Members with roles (leader/worker), workload counters
+argus.team_members   -- Members with roles (manager/agent), workload counters
 argus.issues         -- Issues with AI categorization, multi-assign, Slack metadata
 argus.issue_history  -- Full audit trail
 argus.users          -- Auth records (Google OAuth)
@@ -233,7 +237,7 @@ argus.users          -- Auth records (Google OAuth)
 - **Schema isolation** — `search_path=argus` per connection, zero risk to other DB tables
 - **Small connection pool** — 3+5 connections, won't starve shared RDS
 - **3-phase reminders** — read fast, send Slack (no DB), write fast. No long transactions.
-- **Background RCA** — AI runs in `asyncio.create_task`, doesn't block API responses
+- **Background everything** — RCA, auto-resolve evaluation, Slack notifications all run in `asyncio.create_task`, never block API responses
 - **Single container** — FastAPI serves both API and frontend static files. One pod, one port.
 
 ---
@@ -295,8 +299,8 @@ Single-container pod on EKS:
 
 ```bash
 # Build
-docker build --platform linux/amd64 -t <ecr>/argus:1.0.0 .
-docker push <ecr>/argus:1.0.0
+docker build --platform linux/amd64 -t <ecr>/argus-backend:1.2.3-full .
+docker push <ecr>/argus-backend:1.2.3-full
 
 # Deploy
 kubectl apply -f prodk8s/deployment.yaml
@@ -335,13 +339,13 @@ psql -U postgres -d <db> -f backend/migrations/001_production_schema.sql
 | `GET` | `/api/issues/:id/history` | JWT | Audit trail |
 | `GET` | `/api/teams` | JWT | List teams |
 | `POST` | `/api/teams` | Admin | Create team |
-| `PATCH` | `/api/teams/:id` | Admin/Leader | Update team |
+| `PATCH` | `/api/teams/:id` | Admin/Manager | Update team |
 | `DELETE` | `/api/teams/:id` | Admin | Delete team |
 | `GET` | `/api/teams/:id/members` | JWT | List members |
-| `POST` | `/api/teams/:id/members` | Admin/Leader | Add member |
-| `GET` | `/api/members/assignable` | JWT | All active workers |
-| `PATCH` | `/api/members/:id` | Admin/Leader | Update member |
-| `DELETE` | `/api/members/:id` | Admin/Leader | Remove member |
+| `POST` | `/api/teams/:id/members` | Admin/Manager | Add member |
+| `GET` | `/api/members/assignable` | JWT | All active agents |
+| `PATCH` | `/api/members/:id` | Admin/Manager | Update member |
+| `DELETE` | `/api/members/:id` | Admin/Manager | Remove member |
 | `GET` | `/api/dashboard/stats` | JWT | Dashboard statistics |
 | `GET` | `/api/dashboard/team-stats` | JWT | Per-team stats |
 | `GET` | `/api/dashboard/recent-activity` | JWT | Latest activity |
