@@ -370,4 +370,98 @@ Keep each array to 3 items max. Be concise."""
             }
 
 
+    async def evaluate_rca_for_auto_resolve(self, rca: dict, issue_title: str) -> dict:
+        """
+        Evaluate an RCA result to decide if the issue should be auto-resolved.
+
+        Returns:
+            {"should_resolve": bool, "reason": "explanation"}
+        """
+        # Build a summary of the RCA for the AI to evaluate
+        summary = rca.get("summary", "")
+        full_report = rca.get("full_report", "")
+        root_causes = rca.get("root_causes", [])
+
+        rca_text = full_report or summary
+        if root_causes:
+            rca_text += "\n\nRoot causes:\n" + "\n".join(
+                f"- {rc.get('cause', rc) if isinstance(rc, dict) else rc}" for rc in root_causes
+            )
+
+        if not rca_text.strip():
+            return {"should_resolve": False, "reason": "RCA produced no analysis to evaluate."}
+
+        prompt = f"""You are evaluating an RCA (Root Cause Analysis) for a production issue to decide if it should be auto-resolved or kept open for human attention.
+
+Issue title: {issue_title}
+
+RCA Analysis:
+{rca_text[:3000]}
+
+Based on this RCA, should this issue be AUTO-RESOLVED? Auto-resolve ONLY if the RCA CLEARLY indicates one of:
+1. This is NOT actually an issue (false alarm, expected behavior, test/noise)
+2. The issue is ALREADY FIXED (deployment rolled back, config corrected, self-healed)
+3. The issue is NOT ACTIONABLE (one-time transient blip that won't recur, no impact)
+
+If there is ANY doubt, or the issue seems real and ongoing, keep it OPEN.
+
+IMPORTANT: Write the reason in simple, non-technical language that a customer experience (CX) team member can understand. No jargon.
+
+Return JSON: {{"should_resolve": true/false, "reason": "1 simple sentence a non-technical person would understand"}}"""
+
+        try:
+            response = await litellm.acompletion(
+                **self._completion_kwargs(fast=False),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=20000,
+                timeout=60,
+            )
+            content = response.choices[0].message.content or ""
+            logger.info(f"Auto-resolve AI response: {content[:300]}")
+            result = self._extract_json(content)
+
+            if "should_resolve" not in result:
+                return {"should_resolve": False, "reason": "Could not determine resolution status."}
+
+            # Ensure boolean
+            result["should_resolve"] = bool(result["should_resolve"])
+            return result
+
+        except Exception as e:
+            logger.error(f"Auto-resolve evaluation failed: {e}")
+            return {"should_resolve": False, "reason": f"Evaluation failed: {str(e)}"}
+
+
+    async def summarize_for_cx(self, text: str, context: str = "resolution") -> str:
+        """
+        Summarize a technical message into simple, CX-friendly language.
+        Used for resolution reasons and auto-resolve explanations.
+        """
+        if not text or not text.strip():
+            return text
+
+        prompt = f"""Rewrite this technical {context} message so that a non-technical customer experience (CX) team member can understand it.
+Keep it to 1-2 short sentences. No jargon. Explain the impact simply — is the problem fixed? Was there no real problem? Is it safe to ignore?
+
+Technical message:
+{text[:1500]}
+
+Write ONLY the simplified summary, nothing else."""
+
+        try:
+            response = await litellm.acompletion(
+                **self._completion_kwargs(fast=True),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=150,
+                timeout=20,
+            )
+            summary = (response.choices[0].message.content or "").strip()
+            return summary if summary else text
+        except Exception as e:
+            logger.warning(f"CX summarization failed: {e}")
+            return text
+
+
 ai_service = AIService()

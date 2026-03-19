@@ -678,11 +678,20 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
     queryFn: () => fetchIssueHistory(issueId),
   });
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
+    queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+    queryClient.invalidateQueries({ queryKey: ['issues'] });
+    queryClient.invalidateQueries({ queryKey: ['recent-issues'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['team-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
+  };
+
   const updateMutation = useMutation({
     mutationFn: (payload: { status: IssueStatus; reason?: string }) => updateIssue(issueId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
-      queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+      invalidateAll();
       setStatusMenuOpen(false);
       setShowCloseModal(false);
       triggerSuccessFlash();
@@ -692,8 +701,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const resolveMutation = useMutation({
     mutationFn: (reason: string) => resolveIssue(issueId, reason),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
-      queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+      invalidateAll();
       setShowResolveModal(false);
       triggerSuccessFlash();
     },
@@ -704,8 +712,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
   const teamChangeMutation = useMutation({
     mutationFn: (teamId: string) => updateIssue(issueId, { team_id: teamId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
-      queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+      invalidateAll();
       setTeamMenuOpen(false);
       triggerSuccessFlash();
     },
@@ -718,8 +725,7 @@ export default function IssueDetail({ issueId }: IssueDetailProps) {
       return updateIssue(issueId, { assigned_to: primary, assignees: assigneesPayload });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
-      queryClient.invalidateQueries({ queryKey: ['issue-history', issueId] });
+      invalidateAll();
       setAssignMenuOpen(false);
       setSelectedAssignees(new Set());
       triggerSuccessFlash();

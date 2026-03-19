@@ -163,7 +163,8 @@ async def list_issues(
 
 
 async def _generate_rca_background(issue_id: uuid.UUID, title: str, description: str, category: str, team_name: str):
-    """Generate RCA in background and save to DB. Supports Vishwakarma streaming with live progress."""
+    """Generate RCA in background and save to DB. Supports Vishwakarma streaming with live progress.
+    After RCA completes, evaluates whether the issue should be auto-resolved."""
     try:
         # Pass issue_id and session maker so Vishwakarma can save live progress
         rca = await ai_service.generate_rca(
@@ -183,6 +184,12 @@ async def _generate_rca_background(issue_id: uuid.UUID, title: str, description:
                 issue.ai_provider_used = "vishwakarma" if rca.get("source") == "vishwakarma" else settings.ai_provider
                 await db.commit()
                 logger.info(f"Background RCA generated for issue {issue_id}")
+
+        # ── Auto-resolve evaluation ──
+        # Only evaluate if RCA succeeded (not a fallback error)
+        if rca.get("source") != "fallback":
+            await _auto_resolve_if_not_actionable(issue_id, title, rca)
+
     except Exception as e:
         logger.error(f"Background RCA generation failed for {issue_id}: {e}")
         # Reset ai_rca to NULL so next view retries
@@ -196,6 +203,146 @@ async def _generate_rca_background(issue_id: uuid.UUID, title: str, description:
                     await db.commit()
         except Exception:
             pass
+
+
+async def _auto_resolve_if_not_actionable(issue_id: uuid.UUID, title: str, rca: dict):
+    """Evaluate RCA and auto-resolve the issue if it's clearly not actionable."""
+    from datetime import datetime, timezone
+    from sqlalchemy.orm import joinedload
+    from app.services.assignment_service import release_assignment
+
+    try:
+        verdict = await ai_service.evaluate_rca_for_auto_resolve(rca, title)
+        logger.info(f"Auto-resolve verdict for issue {issue_id}: {verdict}")
+
+        if not verdict.get("should_resolve"):
+            return
+
+        reason = verdict.get("reason", "RCA indicates this issue does not require action.")
+
+        async with async_session_maker() as db:
+            stmt = select(Issue).options(joinedload(Issue.team)).where(Issue.id == issue_id)
+            result = await db.execute(stmt)
+            issue = result.unique().scalar_one_or_none()
+
+            if not issue or issue.status in ("resolved", "closed"):
+                return
+
+            # Mark as resolved
+            old_status = issue.status
+            issue.status = "resolved"
+            issue.resolved_at = datetime.now(timezone.utc)
+            # resolved_by stays None — indicates auto-resolved by system
+
+            # Tag the RCA with auto-resolve info
+            if isinstance(issue.ai_rca, dict):
+                issue.ai_rca = {
+                    **issue.ai_rca,
+                    "auto_resolved": True,
+                    "auto_resolve_reason": reason,
+                }
+
+            # Add history entries
+            from app.services.issue_service import add_history
+            await add_history(db, issue_id, action="resolved", old_value=old_status, new_value="resolved", performed_by="Argus (auto)")
+            await add_history(db, issue_id, action="auto_resolve_reason", new_value=reason, performed_by="Argus (auto)")
+
+            # Release assignments
+            released_ids = set()
+            if issue.assigned_to:
+                await release_assignment(db, issue.assigned_to)
+                released_ids.add(str(issue.assigned_to))
+            for a in (issue.assignees or []):
+                assignee_id = a.get("id")
+                if assignee_id and assignee_id not in released_ids:
+                    try:
+                        await release_assignment(db, uuid.UUID(assignee_id))
+                        released_ids.add(assignee_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to release assignment for {assignee_id}: {e}")
+
+            await db.commit()
+            logger.info(f"Auto-resolved issue {issue_id}: {reason}")
+
+        # Summarize reason for CX team
+        try:
+            cx_reason = await ai_service.summarize_for_cx(reason, context="auto-resolve explanation")
+        except Exception:
+            cx_reason = reason
+
+        # Notify Slack
+        try:
+            from app.slack_bot.messages import STATUS_EMOJI
+            async with async_session_maker() as db:
+                stmt = select(Issue).where(Issue.id == issue_id)
+                result = await db.execute(stmt)
+                issue = result.scalar_one_or_none()
+
+            if issue and issue.slack_channel_id and issue.slack_thread_ts:
+                msg_ts = issue.slack_message_ts or issue.slack_thread_ts
+
+                # Remove all status emojis and add resolved
+                for emoji in STATUS_EMOJI.values():
+                    await slack_service.remove_reaction(issue.slack_channel_id, msg_ts, emoji)
+                await slack_service.add_reaction(issue.slack_channel_id, msg_ts, "white_check_mark")
+
+                # Post auto-resolve message in thread
+                dashboard_url = f"{settings.app_base_url}/issues/{issue_id}"
+                attachments = [{
+                    "color": "#10B981",
+                    "blocks": [
+                        {"type": "section", "text": {"type": "mrkdwn", "text": ":white_check_mark: *Auto-Resolved by Argus*"}},
+                        {"type": "section", "text": {"type": "mrkdwn", "text": f"Our system analyzed this issue and found that no action is needed.\n\n*What happened:* {cx_reason}"}},
+                        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{dashboard_url}|:mag: View in Dashboard> · If this doesn't look right, you can reopen it from the dashboard."}]},
+                    ],
+                }]
+                await slack_service.post_thread_message(
+                    channel=issue.slack_channel_id,
+                    thread_ts=issue.slack_thread_ts,
+                    text=f"Auto-resolved: {cx_reason}",
+                    attachments=attachments,
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify Slack about auto-resolve for {issue_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Auto-resolve evaluation failed for {issue_id}: {e}", exc_info=True)
+
+
+async def _notify_resolve_in_background(
+    issue_id: uuid.UUID, issue, raw_reason: str | None, resolved_by_display: str,
+):
+    """Summarize resolution reason via LLM and post CX-friendly Slack message."""
+    try:
+        # Summarize for CX team
+        cx_reason = raw_reason
+        if raw_reason:
+            try:
+                cx_reason = await ai_service.summarize_for_cx(raw_reason, context="issue resolution")
+            except Exception:
+                cx_reason = raw_reason
+
+        from app.slack_bot.messages import STATUS_EMOJI, format_resolution_blocks
+        msg_ts = issue.slack_message_ts or issue.slack_thread_ts
+
+        # Remove all status emojis
+        for emoji in STATUS_EMOJI.values():
+            await slack_service.remove_reaction(issue.slack_channel_id, msg_ts, emoji)
+
+        # Add resolved emoji
+        await slack_service.add_reaction(issue.slack_channel_id, msg_ts, "white_check_mark")
+
+        # Post rich resolution message with CX-friendly summary
+        fallback, attachments = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url, reason=cx_reason)
+        await slack_service.post_thread_message(
+            channel=issue.slack_channel_id,
+            thread_ts=issue.slack_thread_ts,
+            text="",
+            attachments=attachments,
+        )
+        logger.info(f"Slack resolve notification sent for issue {issue_id}")
+    except Exception as e:
+        logger.error(f"Failed to post Slack resolution for issue {issue_id}: {e}", exc_info=True)
 
 
 @router.get("/{issue_id}", response_model=IssueResponse)
@@ -651,37 +798,19 @@ async def resolve_issue(
             except (ValueError, Exception) as e:
                 logger.warning(f"Failed to release assignment for secondary assignee {assignee_id}: {e}")
 
-    # Notify in Slack thread
-    if issue.slack_channel_id and issue.slack_thread_ts:
-        try:
-            from app.slack_bot.messages import STATUS_EMOJI, format_resolution_blocks
-            msg_ts = issue.slack_message_ts or issue.slack_thread_ts
-
-            # Remove ALL status emojis
-            for emoji in STATUS_EMOJI.values():
-                await slack_service.remove_reaction(issue.slack_channel_id, msg_ts, emoji)
-
-            # Add only resolved emoji
-            await slack_service.add_reaction(issue.slack_channel_id, msg_ts, "white_check_mark")
-
-            # The person who clicked Resolve — use @mention if they have a Slack ID
-            if user.slack_user_id:
-                resolved_by_display = f"<@{user.slack_user_id}>"
-            else:
-                resolved_by_display = user.name
-
-            # Post rich resolution message
-            fallback, attachments = format_resolution_blocks(issue, resolved_by_display, settings.app_base_url, reason=body.reason)
-            await slack_service.post_thread_message(
-                channel=issue.slack_channel_id,
-                thread_ts=issue.slack_thread_ts,
-                text="",
-                attachments=attachments,
-            )
-        except Exception as e:
-            logger.error(f"Failed to post Slack resolution for issue {issue_id}: {e}")
-
+    # Return immediately — Slack notification with CX summary happens async
     resolved = await issue_service.get_issue_with_details(db, issue.id)
+
+    # Fire-and-forget: summarize + notify Slack in background
+    if issue.slack_channel_id and issue.slack_thread_ts:
+        import asyncio
+        resolved_by_display = f"<@{user.slack_user_id}>" if user.slack_user_id else user.name
+        task = asyncio.create_task(_notify_resolve_in_background(
+            issue_id, issue, body.reason, resolved_by_display,
+        ))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
     return _issue_to_response(resolved)
 
 

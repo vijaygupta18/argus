@@ -24,6 +24,7 @@ def register_handlers(app):
     @app.event("app_mention")
     async def handle_mention(event, say, client):
         """Main entry point: someone tagged the bot to report an issue."""
+        logger.info(f"app_mention received: user={event.get('user')} text={event.get('text', '')[:80]}")
         channel = event["channel"]
         thread_ts = event.get("thread_ts", event["ts"])
         message_ts = event["ts"]
@@ -309,6 +310,34 @@ def register_handlers(app):
                 f"Created issue from Slack: {issue_id} - {title} "
                 f"(team={matched_team['name']}, assignee={assignee_row.name if assignee_row else 'none'})"
             )
+
+            # ── Phase 5: Trigger RCA immediately in background ──
+            if settings.ai_api_key:
+                import asyncio
+                from app.database import async_session_maker
+                from sqlalchemy import update as sql_update, or_, cast, Text
+                from app.models.issue import Issue as IssueModel
+
+                # Atomically mark as investigating
+                async with async_session_maker() as guard_session:
+                    await guard_session.execute(
+                        sql_update(IssueModel)
+                        .where(IssueModel.id == issue_id)
+                        .where(or_(
+                            IssueModel.ai_rca.is_(None),
+                            cast(IssueModel.ai_rca, Text) == "null",
+                        ))
+                        .values(ai_rca={"status": "investigating"})
+                    )
+                    await guard_session.commit()
+
+                from app.api.issues import _generate_rca_background, _background_tasks
+                task = asyncio.create_task(_generate_rca_background(
+                    issue_id, title, issue_text, category or "other", matched_team["name"]
+                ))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
+                logger.info(f"Triggered immediate RCA for issue {issue_id}")
 
         except Exception as e:
             # FIX 5: Log the full error but don't leak internal details to Slack
